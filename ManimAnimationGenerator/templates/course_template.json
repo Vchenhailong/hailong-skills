@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "教学内容 JSON 模板 - 用于指导 AI 生成课程内容",
+  "type": "object",
+  "required": ["topic", "version", "atoms"],
+  "properties": {
+    "topic": {
+      "type": "string",
+      "description": "课程主题",
+      "example": "矩阵的诞生"
+    },
+    "version": {
+      "type": "string",
+      "description": "版本号",
+      "example": "1.0"
+    },
+    "source": {
+      "type": "string",
+      "description": "教材或知识来源",
+      "example": "同济线性代数 第6版 第一章"
+    },
+    "prerequisites": {
+      "type": "array",
+      "description": "前置知识列表",
+      "items": {"type": "string"},
+      "example": ["二元一次方程组", "向量"]
+    },
+    "atoms": {
+      "type": "array",
+      "description": "教学原子序列，按教学顺序排列",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "content", "duration"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "原子唯一标识，建议蛇形命名",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "example": "matrix_definition"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["definition", "intuition", "operation", "counter_intuitive", "application", "summary"],
+            "description": "原子类型，对应教学七阶段"
+          },
+          "content": {
+            "type": "array",
+            "description": "内容数组，按显示顺序排列",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["text", "type"],
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "description": "显示文本或 LaTeX 表达式"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["highlight", "content", "formula", "mixed"],
+                  "description": "type=highlight 强调文本(浅蓝)，type=content 普通文本(白)，type=formula 数学公式(白)，type=mixed 混合内容(需配合 tex_template=ctex)"
+                }
+              }
+            }
+          },
+          "layout": {
+            "type": "string",
+            "enum": ["vertical", "two_column", "three_column", "centered"],
+            "default": "vertical",
+            "description": "布局类型：vertical（单栏垂直排列）、two_column（两栏）、three_column（三栏）、centered（居中）"
+          },
+          "tex_template": {
+            "type": "string",
+            "enum": ["", "ctex"],
+            "default": "",
+            "description": "LaTeX 模板：空表示使用拆分渲染，ctex 表示使用 ctex 模板处理混合内容"
+          },
+          "graphics": {
+            "type": "object",
+            "description": "图形绘制描述",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["axes", "function", "polygon", "linear_algebra", "matrix_animation", "comparison", "image_effect", "physics", "three_d"],
+                "description": "图形类型"
+              },
+              "params": {
+                "type": "object",
+                "description": "图形参数"
+              }
+            }
+          },
+          "visual_action": {
+            "oneOf": [
+              {"type": "string", "description": "视觉动作名称"},
+              {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {"type": "string", "description": "视觉动作名称"},
+                  "params": {"type": "object", "description": "动作参数"}
+                }
+              }
+            ],
+            "description": "视觉动作，用于指导动画生成",
+            "examples": [
+              "show_equations",
+              {"name": "highlight_matrix_cell", "params": {"row": 0, "col": 0}}
+            ]
+          },
+          "speech": {
+            "type": "string",
+            "description": "语音文本（已转义数学符号）",
+            "maxLength": 36,
+            "example": "矩阵是由数字排列成的矩形阵列"
+          },
+          "duration": {
+            "type": "number",
+            "description": "预计时长（秒）",
+            "default": 6.0,
+            "minimum": 3.0,
+            "maximum": 12.0
+          }
+        }
+      }
+    }
+  }
+}

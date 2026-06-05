@@ -1,0 +1,72 @@
+{
+  "topic": "布局完整性验证",
+  "version": "1.0",
+  "source": "Manim 技能布局规范",
+  "prerequisites": [],
+  "atoms": [
+    {
+      "id": "single_column_verification",
+      "type": "intuition",
+      "layout": "vertical",
+      "content": [
+        {"text": "单栏布局验证", "type": "highlight"},
+        {"text": "：5行独立公式 | 无图形 | 30字字幕", "type": "content"},
+        {"text": "a^2 + b^2 = c^2", "type": "formula"},
+        {"text": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}", "type": "formula"},
+        {"text": "(x - h)^2 + (y - k)^2 = r^2", "type": "formula"},
+        {"text": "m = \\frac{y_2 - y_1}{x_2 - x_1}", "type": "formula"},
+        {"text": "\\log_a (xy) = \\log_a x + \\log_a y", "type": "formula"}
+      ],
+      "speech": "单栏布局验证：勾股定理、一元二次方程、圆的方程、直线斜率、对数运算法则。字幕数的数量展示30个以上，以验证有多少行，是否会翻动",
+      "duration": 6.0
+    },
+    {
+      "id": "two_column_verification",
+      "type": "intuition",
+      "layout": "two_column",
+      "content": [
+        {"text": "两栏布局验证", "type": "highlight"},
+        {"text": "：左栏5行公式 | 右栏正弦函数图 | 30字字幕", "type": "content"},
+        {"text": "\\sum_{k=1}^{\\infty} \\frac{1}{k^2} = \\frac{\\pi^2}{6}", "type": "formula"},
+        {"text": "P(n,k) = \\frac{n!}{(n-k)!}", "type": "formula"},
+        {"text": "C(n,k) = \\frac{n!}{k!(n-k)!}", "type": "formula"},
+        {"text": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}", "type": "formula"},
+        {"text": "\\tan x = \\frac{\\sin x}{\\cos x},\\quad \\cot x = \\frac{1}{\\tan x}", "type": "formula"}
+      ],
+      "graphics": {
+        "type": "function",
+        "params": {
+          "function": "sin(x)",
+          "x_range": [-3, 3],
+          "color": "#66DDFF"
+        }
+      },
+      "speech": "两栏布局验证：求和、排列、组合、一元二次方程、正切余切方程。字幕数的数量展示30个以上，并且动画图形中应该有坐标系正确呈现",
+      "duration": 8.0
+    },
+    {
+      "id": "three_column_verification",
+      "type": "intuition",
+      "layout": "three_column",
+      "content": [
+        {"text": "三栏布局验证", "type": "highlight"},
+        {"text": "：左栏概念定理 | 中栏5行公式 | 右栏立体几何 | 50字字幕", "type": "content"},
+        {"text": "极限：\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1", "type": "formula"},
+        {"text": "矩阵：A = \\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}", "type": "formula"},
+        {"text": "向量：\\vec{v} = (x, y, z)", "type": "formula"},
+        {"text": "导数：\\frac{d}{dx} \\ln x = \\frac{1}{x}", "type": "formula"},
+        {"text": "积分：\\int_a^b f(x) dx", "type": "formula"}
+      ],
+      "graphics": {
+        "type": "three_d",
+        "params": {
+          "shape": "cube",
+          "side_length": 1.2,
+          "color": "#66DDFF"
+        }
+      },
+      "speech": "三栏布局验证：极限、矩阵、向量、导数与积分，以及立体几何立方体。字幕数的数量展示50个以上，以验证有多少行，是否会翻动。如果没有看到，先确认时长设定与计算是否正确。 约4字/秒",
+      "duration": 14.0
+    }
+  ]
+}

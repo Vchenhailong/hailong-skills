@@ -1,0 +1,9 @@
+
+# 给脚本添加执行权限（Git Bash 或 WSL 中）
+chmod +x examples/run_example.sh
+
+# 运行示例
+bash examples/run_example.sh
+
+# 或指定其他 JSON 文件
+bash examples/run_example.sh my_course.json

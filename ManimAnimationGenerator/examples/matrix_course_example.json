@@ -1,0 +1,167 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "教学内容 JSON 示例 - 矩阵乘法（符合 json_schema.md 规范）",
+  "type": "object",
+  "required": ["topic", "version", "atoms"],
+  "properties": {
+    "topic": {
+      "type": "string",
+      "description": "课程主题",
+      "example": "矩阵乘法"
+    },
+    "version": {
+      "type": "string",
+      "description": "版本号",
+      "example": "1.0"
+    },
+    "source": {
+      "type": "string",
+      "description": "教材或知识来源",
+      "example": "同济线性代数 第6版 第二章"
+    },
+    "prerequisites": {
+      "type": "array",
+      "description": "前置知识列表",
+      "items": {"type": "string"},
+      "example": ["向量点积", "矩阵基本概念"]
+    },
+    "atoms": {
+      "type": "array",
+      "description": "教学原子序列",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "content", "duration"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "原子唯一标识",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "example": "mat_mul_definition"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["definition", "intuition", "operation", "counter_intuitive", "application", "summary"],
+            "description": "原子类型"
+          },
+          "content": {
+            "type": "array",
+            "description": "内容数组",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["text", "type"],
+              "properties": {
+                "text": {"type": "string"},
+                "type": {
+                  "type": "string",
+                  "enum": ["highlight", "content", "formula", "mixed"],
+                  "description": "highlight=强调, content=正文, formula=公式, mixed=混合(需配合tex_template)"
+                }
+              }
+            }
+          },
+          "layout": {
+            "type": "string",
+            "enum": ["vertical", "two_column", "three_column", "centered"],
+            "default": "vertical",
+            "description": "原子内布局"
+          },
+          "tex_template": {
+            "type": "string",
+            "enum": ["", "ctex"],
+            "default": "",
+            "description": "LaTeX 模板，ctex 支持中文混合"
+          },
+          "graphics": {
+            "type": "object",
+            "description": "图形绘制描述",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["axes", "function", "polygon", "linear_algebra", "matrix_animation", "comparison", "image_effect", "physics", "three_d"],
+                "description": "图形类型"
+              },
+              "params": {
+                "type": "object",
+                "description": "图形参数"
+              }
+            }
+          },
+          "visual_action": {
+            "oneOf": [
+              {"type": "string"},
+              {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {"type": "string"},
+                  "params": {"type": "object"}
+                }
+              }
+            ],
+            "description": "视觉动作"
+          },
+          "speech": {
+            "type": "string",
+            "description": "语音文本",
+            "maxLength": 100,
+            "example": "矩阵乘法定义：结果矩阵第i行第j列等于A的第i行与B的第j列的点积。"
+          },
+          "duration": {
+            "type": "number",
+            "description": "预计时长（秒）",
+            "default": 6.0,
+            "minimum": 3.0,
+            "maximum": 12.0
+          }
+        }
+      }
+    }
+  },
+  "examples": {
+    "atoms": [
+      {
+        "id": "mat_mul_intuition",
+        "type": "intuition",
+        "layout": "two_column",
+        "content": [
+          {"text": "矩阵乘法的几何意义", "type": "highlight"},
+          {"text": "将向量空间进行线性变换的复合", "type": "content"}
+        ],
+        "graphics": {
+          "type": "linear_algebra",
+          "params": {
+            "vectors": [[1,0], [0,1]],
+            "transform": [[2,0],[0,2]]
+          }
+        },
+        "speech": "矩阵乘法可以理解为两个线性变换的先后作用，比如先旋转再缩放。",
+        "duration": 6.0
+      },
+      {
+        "id": "mat_mul_definition",
+        "type": "definition",
+        "layout": "vertical",
+        "content": [
+          {"text": "矩阵乘法定义", "type": "highlight"},
+          {"text": "(AB)_{ij} = \\sum_{k=1}^{n} A_{ik} B_{kj}", "type": "formula"},
+          {"text": "要求A的列数等于B的行数", "type": "content"}
+        ],
+        "speech": "乘积矩阵的第i行第j列元素，等于A的第i行与B的第j列的点积。",
+        "duration": 7.0
+      },
+      {
+        "id": "mat_mul_counter",
+        "type": "counter_intuitive",
+        "layout": "two_column",
+        "content": [
+          {"text": "常见错误猜测", "type": "highlight"},
+          {"text": "按对应位置相乘", "type": "content"},
+          {"text": "正确做法：行点乘列", "type": "formula", "highlight": true}
+        ],
+        "speech": "有人可能以为矩阵乘法是相同位置直接相乘，这是错误的。实际上需要行与列的点积。",
+        "duration": 8.0
+      }
+    ]
+  }
+}
