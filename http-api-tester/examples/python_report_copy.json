@@ -1,0 +1,197 @@
+{
+  "project_info": {
+    "name": "Python API Test",
+    "description": "测试Python API的功能和性能",
+    "version": "1.0.0"
+  },
+  "test_environment": {
+    "host": "localhost",
+    "port": 8000,
+    "protocol": "http",
+    "environment": "development"
+  },
+  "test_cases": [
+    {
+      "id": "TEST_001",
+      "name": "获取用户列表",
+      "description": "测试获取用户列表的API",
+      "endpoint": "/api/users",
+      "method": "GET",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "expected_status": 200,
+      "expected_response": {
+        "status": "success",
+        "data": {
+          "users": [
+            {
+              "id": 1,
+              "name": "张三",
+              "email": "zhangsan@example.com"
+            },
+            {
+              "id": 2,
+              "name": "李四",
+              "email": "lisi@example.com"
+            }
+          ]
+        }
+      },
+      "actual_status": 200,
+      "actual_response": {
+        "status": "success",
+        "data": {
+          "users": [
+            {
+              "id": 1,
+              "name": "张三",
+              "email": "zhangsan@example.com"
+            },
+            {
+              "id": 2,
+              "name": "李四",
+              "email": "lisi@example.com"
+            }
+          ]
+        }
+      },
+      "result": "pass",
+      "execution_time": 125,
+      "timestamp": "2023-06-15T10:30:00Z"
+    },
+    {
+      "id": "TEST_002",
+      "name": "创建新用户",
+      "description": "测试创建新用户的API",
+      "endpoint": "/api/users",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "name": "王五",
+        "email": "wangwu@example.com"
+      },
+      "expected_status": 201,
+      "expected_response": {
+        "status": "success",
+        "data": {
+          "user": {
+            "id": 3,
+            "name": "王五",
+            "email": "wangwu@example.com"
+          }
+        }
+      },
+      "actual_status": 201,
+      "actual_response": {
+        "status": "success",
+        "data": {
+          "user": {
+            "id": 3,
+            "name": "王五",
+            "email": "wangwu@example.com"
+          }
+        }
+      },
+      "result": "pass",
+      "execution_time": 200,
+      "timestamp": "2023-06-15T10:31:00Z"
+    },
+    {
+      "id": "TEST_003",
+      "name": "获取不存在的用户",
+      "description": "测试获取不存在用户的API",
+      "endpoint": "/api/users/999",
+      "method": "GET",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "expected_status": 404,
+      "expected_response": {
+        "status": "error",
+        "message": "用户不存在"
+      },
+      "actual_status": 404,
+      "actual_response": {
+        "status": "error",
+        "message": "用户不存在"
+      },
+      "result": "pass",
+      "execution_time": 95,
+      "timestamp": "2023-06-15T10:32:00Z"
+    }
+  ],
+  "summary": {
+    "total_tests": 3,
+    "passed_tests": 3,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "pass_rate": 100,
+    "total_execution_time": 420
+  },
+  "execution_info": {
+    "start_time": "2023-06-15T10:30:00Z",
+    "end_time": "2023-06-15T10:32:30Z",
+    "duration": 150,
+    "tester": "hailong.chen",
+    "ai_model": "GPT-4"
+  },
+  "call_chain": [
+    {
+      "id": "CALL_001",
+      "parent_id": null,
+      "test_case_id": "TEST_001",
+      "endpoint": "/api/users",
+      "method": "GET",
+      "status_code": 200,
+      "execution_time": 125,
+      "timestamp": "2023-06-15T10:30:00Z"
+    },
+    {
+      "id": "CALL_002",
+      "parent_id": "CALL_001",
+      "test_case_id": "TEST_002",
+      "endpoint": "/api/users",
+      "method": "POST",
+      "status_code": 201,
+      "execution_time": 200,
+      "timestamp": "2023-06-15T10:31:00Z"
+    },
+    {
+      "id": "CALL_003",
+      "parent_id": "CALL_002",
+      "test_case_id": "TEST_003",
+      "endpoint": "/api/users/999",
+      "method": "GET",
+      "status_code": 404,
+      "execution_time": 95,
+      "timestamp": "2023-06-15T10:32:00Z"
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "DEP_001",
+      "test_case_id": "TEST_002",
+      "depends_on": "TEST_001"
+    },
+    {
+      "id": "DEP_002",
+      "test_case_id": "TEST_003",
+      "depends_on": "TEST_002"
+    }
+  ],
+  "environment_variables": [
+    {
+      "name": "API_KEY",
+      "value": "test_api_key_123",
+      "description": "API访问密钥"
+    },
+    {
+      "name": "DB_URL",
+      "value": "sqlite:///test.db",
+      "description": "数据库连接URL"
+    }
+  ]
+}

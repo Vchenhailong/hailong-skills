@@ -1,0 +1,2516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freedom API 测试报告</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        /* 全局滚动条隐藏 */
+        html, body {
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+        }
+        
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        *::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            background: transparent !important;
+        }
+        
+        code, pre, .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        :root {
+            --primary: #6366f1;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-card: rgba(15, 23, 42, 0.8);
+        }
+        
+        body {
+            background: linear-gradient(135deg, #000000 0%, #0a0a1a 50%, #000000 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            background-image: 
+                radial-gradient(2px 2px at 20px 30px, #ffffff, transparent),
+                radial-gradient(2px 2px at 40px 70px, #ffffff, transparent),
+                radial-gradient(1px 1px at 90px 40px, #ffffff, transparent),
+                radial-gradient(2px 2px at 130px 80px, #ffffff, transparent),
+                radial-gradient(1px 1px at 160px 120px, #ffffff, transparent),
+                radial-gradient(2px 2px at 200px 50px, #ffffff, transparent),
+                radial-gradient(1px 1px at 250px 160px, #ffffff, transparent),
+                radial-gradient(2px 2px at 300px 90px, #ffffff, transparent),
+                radial-gradient(1px 1px at 350px 30px, #ffffff, transparent),
+                radial-gradient(2px 2px at 400px 140px, #ffffff, transparent),
+                radial-gradient(1px 1px at 450px 60px, #ffffff, transparent),
+                radial-gradient(2px 2px at 500px 110px, #ffffff, transparent),
+                radial-gradient(1px 1px at 550px 180px, #ffffff, transparent),
+                radial-gradient(2px 2px at 600px 40px, #ffffff, transparent),
+                radial-gradient(1px 1px at 650px 100px, #ffffff, transparent),
+                radial-gradient(2px 2px at 700px 150px, #ffffff, transparent),
+                radial-gradient(1px 1px at 750px 70px, #ffffff, transparent),
+                radial-gradient(2px 2px at 800px 120px, #ffffff, transparent),
+                radial-gradient(1px 1px at 850px 30px, #ffffff, transparent),
+                radial-gradient(2px 2px at 900px 90px, #ffffff, transparent),
+                radial-gradient(1px 1px at 950px 160px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1000px 50px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1050px 110px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1100px 80px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1150px 140px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1200px 30px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1250px 100px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1300px 170px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1350px 60px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1400px 120px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1450px 40px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1500px 90px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1550px 150px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1600px 70px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1650px 130px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1700px 20px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1750px 100px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1800px 160px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1850px 50px, #ffffff, transparent),
+                radial-gradient(2px 2px at 1900px 110px, #ffffff, transparent),
+                radial-gradient(1px 1px at 1950px 80px, #ffffff, transparent);
+            background-size: 2000px 2000px;
+            opacity: 0.3;
+            animation: starsTwinkle 8s ease-in-out infinite;
+        }
+        
+        @keyframes starsTwinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Custom cursor styles - hide default cursor */
+        body {
+            cursor: none !important;
+        }
+        
+        /* Ensure all interactive elements also have no default cursor */
+        button, a, .chain-card, .test-item, .tab-btn, .magnetic-btn, .metric-card, input, textarea, select {
+            cursor: none !important;
+        }
+        
+        body::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+        
+        body {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        body.devtools-open {
+            cursor: auto !important;
+        }
+        
+        body.devtools-open button, 
+        body.devtools-open a, 
+        body.devtools-open .chain-card, 
+        body.devtools-open .test-item, 
+        body.devtools-open .tab-btn, 
+        body.devtools-open .magnetic-btn, 
+        body.devtools-open .metric-card {
+            cursor: pointer !important;
+        }
+        
+        body.devtools-open input, 
+        body.devtools-open textarea, 
+        body.devtools-open select {
+            cursor: text !important;
+        }
+        
+        body.devtools-open .cursor-glow,
+        body.devtools-open .comet-head,
+        body.devtools-open .comet-tail-particle,
+        body.devtools-open .stardust {
+            display: none !important;
+        }
+        
+        .glass {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            box-shadow: none;
+            border-radius: inherit;
+        }
+        
+        .glass-light {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .solid-text {
+            color: #6366f1;
+        }
+        
+        .neon-border {
+            position: relative;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+        }
+        
+        .neon-border:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            background: rgba(99, 102, 241, 0.08);
+        }
+        
+        .neon-border::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: inherit;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899, #6366f1);
+            background-size: 300% 300%;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            animation: borderGlow 3s ease infinite;
+            transform-style: preserve-3d;
+            backface-visibility: visible;
+        }
+        
+        .neon-border:hover::before {
+            opacity: 1;
+        }
+        
+        @keyframes borderGlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .chain-card {
+            perspective: 1000px;
+            transform-style: preserve-3d;
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: pointer;
+            height: 230px;
+            will-change: transform;
+        }
+        
+        .chain-card-inner {
+            transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            transform-style: preserve-3d;
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            will-change: transform;
+            transform: rotateX(var(--rotate-x, 0deg)) rotateY(var(--rotate-y, 0deg)) scale(var(--scale, 1));
+        }
+        
+        .chain-card-inner::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(99, 102, 241, 0.4) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+            z-index: 1;
+            transform-style: preserve-3d;
+            backface-visibility: visible;
+            border-radius: inherit;
+        }
+        
+        .chain-card:hover .chain-card-inner::before {
+            opacity: 1;
+        }
+        
+        .chain-card:active .chain-card-inner::before {
+            opacity: 1;
+            transform: scale(2);
+            animation: clickBurst 0.6s ease-out;
+        }
+        
+        @keyframes clickBurst {
+            0% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+            }
+        }
+        
+        .chain-card:hover .chain-card-inner {
+            --scale: 1.05;
+        }
+        
+        .chain-card:hover {
+            box-shadow: none;
+        }
+        
+        .metric-card {
+            position: relative;
+            overflow: visible;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            will-change: transform;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+            will-change: opacity;
+        }
+        
+        .metric-card:hover::before {
+            opacity: 1;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-10px) scale(1.03);
+            box-shadow: 
+                0 20px 40px rgba(99, 102, 241, 0.3),
+                0 0 20px rgba(168, 85, 247, 0.2);
+        }
+        
+        .metric-title-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            overflow: visible;
+        }
+        
+        .metric-info-icon {
+            position: relative;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(99, 102, 241, 0.2);
+            color: #6366f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: help;
+            transition: all 0.3s ease;
+            z-index: 20;
+        }
+        
+        .metric-info-icon:hover {
+            background: rgba(99, 102, 241, 0.4);
+            transform: scale(1.1);
+        }
+        
+        .metric-tooltip {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%) translateX(8px);
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #94a3b8;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 9999;
+            pointer-events: none;
+            overflow: visible;
+        }
+        
+        .metric-info-icon:hover .metric-tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(-50%) translateX(12px);
+        }
+        
+        .test-item {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+            border-left: 3px solid transparent;
+        }
+        
+        .test-item::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, transparent 70%);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.5s ease, height 0.5s ease;
+            pointer-events: none;
+        }
+        
+        .test-item:hover::after {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .test-item:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-left-color: #6366f1;
+            padding-left: 1.5rem;
+            transform: translateX(5px);
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            display: none;
+            transition: opacity 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+            display: block;
+        }
+        
+        .modal-content {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 1001;
+            box-shadow: 
+                0 0 20px rgba(99, 102, 241, 0.3),
+                0 0 40px rgba(168, 85, 247, 0.2);
+        }
+        
+        .modal-overlay.active .modal-content {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            box-shadow: 
+                0 0 30px rgba(99, 102, 241, 0.5),
+                0 0 60px rgba(168, 85, 247, 0.3);
+        }
+        
+        @keyframes modalBorder {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: rgba(99, 102, 241, 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            box-shadow: 0 0 6px rgba(99, 102, 241, 0.6);
+        }
+        
+        .cursor-glow {
+            position: fixed;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s ease;
+        }
+        
+        .magnetic-btn {
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        
+        .magnetic-btn:hover {
+            box-shadow: 
+                0 0 20px rgba(99, 102, 241, 0.5),
+                0 0 40px rgba(168, 85, 247, 0.3);
+        }
+        
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255, 0.4);
+            transform: scale(0);
+            animation: rippleEffect 0.6s ease-out;
+            pointer-events: none;
+        }
+        
+        @keyframes rippleEffect {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+        
+        .shimmer {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .shimmer::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: shimmerEffect 2s infinite;
+        }
+        
+        @keyframes shimmerEffect {
+            100% { left: 100%; }
+        }
+        
+        .float-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+        }
+        
+        .pulse-glow {
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulseGlow {
+            0%, 100% { 
+                box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+            }
+            50% { 
+                box-shadow: 0 0 40px rgba(168, 85, 247, 0.6);
+            }
+        }
+        
+        .slide-up {
+            opacity: 0;
+            transform: translateY(40px);
+            animation: slideUp 0.8s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+        
+        @keyframes slideUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .scale-in {
+            opacity: 0;
+            transform: scale(0.8);
+            animation: scaleIn 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+        
+        @keyframes scaleIn {
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .fade-in {
+            opacity: 0;
+            animation: fadeIn 1s ease forwards;
+        }
+        
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+        
+        .glitch {
+            position: relative;
+        }
+        
+        .glitch:hover {
+            animation: glitch 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite;
+        }
+        
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+        }
+        
+        .tab-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+        
+        .tab-btn::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #6366f1, #a855f7);
+            transition: all 0.3s ease;
+            transform: translateX(-50%);
+        }
+        
+        .tab-btn::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: inherit;
+            background: radial-gradient(circle at center, rgba(99, 102, 241, 0.3) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        .tab-btn:hover::before,
+        .tab-btn.active::before {
+            width: 100%;
+        }
+        
+        .tab-btn:hover::after,
+        .tab-btn.active::after {
+            opacity: 1;
+        }
+        
+        .tab-btn.active {
+            background: #6366f1;
+            box-shadow: 
+                0 4px 15px rgba(99, 102, 241, 0.4),
+                0 0 20px rgba(168, 85, 247, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .tab-btn:hover {
+            transform: scale(1.05) rotateY(5deg);
+            box-shadow: 
+                0 0 20px rgba(99, 102, 241, 0.4),
+                0 0 40px rgba(168, 85, 247, 0.3);
+        }
+        
+        .code-block {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            border-radius: 12px;
+            padding: 1.5rem;
+            overflow-x: auto;
+            overflow-y: auto;
+            position: relative;
+            max-height: 300px;
+            min-height: 200px;
+        }
+        
+        .code-block::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #6366f1, transparent);
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* 滚动指示器样式 */
+        .scroll-indicator {
+            all: unset !important;
+            position: absolute !important;
+            width: 100% !important;
+            height: 40px !important;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 9999 !important;
+            pointer-events: none !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            transition: opacity 0.3s ease, visibility 0.3s ease !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: rgba(15, 23, 42, 0.8) !important;
+        }
+        
+        /* 向上滚动指示器 - 固定在顶部 */
+        .scroll-indicator.up {
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            background: linear-gradient(to top, transparent, rgba(15, 23, 42, 0.8)) !important;
+        }
+        
+        /* 向下滚动指示器 - 固定在底部 */
+        .scroll-indicator.down {
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            background: linear-gradient(to bottom, transparent, rgba(15, 23, 42, 0.8)) !important;
+        }
+        
+        /* 滚动容器样式 */
+        .scroll-container {
+            position: relative !important;
+            overflow: auto !important;
+        }
+        
+        /* 滚动容器包装器 */
+        .scroll-container-wrapper {
+            position: relative !important;
+        }
+        
+        /* 确保包装器内的内容区域是相对定位的 */
+        .scroll-container-wrapper .scroll-container {
+            position: relative !important;
+        }
+        
+        /* 包装器内的指示器样式 */
+        .scroll-container-wrapper .scroll-indicator {
+            position: absolute !important;
+        }
+        
+        /* 包装器内的向上指示器 */
+        .scroll-container-wrapper .scroll-indicator.up {
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+        }
+        
+        /* 包装器内的向下指示器 */
+        .scroll-container-wrapper .scroll-indicator.down {
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+        }
+        
+        /* 滚动指示器显示/隐藏规则 */
+        .scroll-indicator { display: none !important; }
+        
+        /* 当可以向上滚动时显示向上指示器 */
+        .can-scroll-up .scroll-indicator.up {
+            display: flex !important;
+        }
+        
+        /* 当可以向下滚动时显示向下指示器 */
+        .can-scroll-down .scroll-indicator.down {
+            display: flex !important;
+        }
+        
+        /* 向左滚动指示器 */
+        .scroll-indicator.left {
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(to left, transparent, rgba(15, 23, 42, 0.8));
+            width: 40px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding-left: 8px;
+        }
+        
+        /* 向右滚动指示器 */
+        .scroll-indicator.right {
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(to right, transparent, rgba(15, 23, 42, 0.8));
+            width: 40px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+        }
+        
+        /* 滚动箭头样式 */
+        .scroll-arrow {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #6366f1;
+            border-left: none;
+            border-bottom: none;
+            animation: scrollPulse 2s ease-in-out infinite;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* 向上箭头 */
+        .scroll-arrow.up {
+            transform: rotate(-45deg);
+        }
+        
+        /* 向下箭头 */
+        .scroll-arrow.down {
+            transform: rotate(135deg);
+        }
+        
+        /* 向左箭头 */
+        .scroll-arrow.left {
+            transform: rotate(-135deg);
+        }
+        
+        /* 向右箭头 */
+        .scroll-arrow.right {
+            transform: rotate(45deg);
+        }
+        
+        /* 箭头脉冲动画 */
+        @keyframes scrollPulse {
+            0%, 100% {
+                opacity: 0.8;
+                transform: translateY(0) rotate(var(--rotate, 0deg));
+            }
+            50% {
+                opacity: 0.3;
+                transform: translateY(var(--translate, 8px)) rotate(var(--rotate, 0deg));
+            }
+        }
+        
+        /* 设置箭头动画变量 */
+        .scroll-arrow.up {
+            --rotate: -45deg;
+            --translate: -8px;
+        }
+        
+        .scroll-arrow.down {
+            --rotate: 135deg;
+            --translate: 8px;
+        }
+        
+        .chain-auth { animation-delay: 0.1s; }
+        .chain-service { animation-delay: 0.2s; }
+        .chain-request { animation-delay: 0.3s; }
+        .chain-payment { animation-delay: 0.4s; }
+        .chain-info { animation-delay: 0.5s; }
+        .chain-contact { animation-delay: 0.6s; }
+        .chain-region { animation-delay: 0.7s; }
+        .chain-dust { animation-delay: 0.8s; }
+        .chain-report { animation-delay: 0.9s; }
+        .chain-health { animation-delay: 1.0s; }
+        .chain-ad { animation-delay: 1.1s; }
+        
+        .status-badge {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .status-badge::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.4s ease, height 0.4s ease;
+        }
+        
+        .status-badge:hover::before {
+            width: 100px;
+            height: 100px;
+        }
+        
+        .chart-container {
+            position: relative;
+            padding: 20px;
+        }
+        
+        .chart-container::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        .comet-head {
+            position: fixed;
+            width: 24px;
+            height: 24px;
+            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #e879f9 30%, #a855f7 60%, #6366f1 100%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10002;
+            box-shadow: 
+                0 0 20px rgba(232, 121, 249, 0.9),
+                0 0 40px rgba(168, 85, 247, 0.7),
+                0 0 60px rgba(99, 102, 241, 0.5),
+                0 0 80px rgba(236, 72, 153, 0.3),
+                inset 0 0 12px rgba(255, 255, 255, 0.7);
+            will-change: transform;
+            filter: blur(0.3px);
+        }
+        
+        @keyframes cometPulse {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 
+                    0 0 20px rgba(232, 121, 249, 0.9),
+                    0 0 40px rgba(168, 85, 247, 0.7),
+                    0 0 60px rgba(99, 102, 241, 0.5),
+                    0 0 80px rgba(236, 72, 153, 0.3),
+                    inset 0 0 12px rgba(255, 255, 255, 0.7);
+            }
+            50% { 
+                transform: scale(1.2);
+                box-shadow: 
+                    0 0 30px rgba(232, 121, 249, 1),
+                    0 0 50px rgba(168, 85, 247, 0.8),
+                    0 0 70px rgba(99, 102, 241, 0.6),
+                    0 0 90px rgba(236, 72, 153, 0.4),
+                    inset 0 0 15px rgba(255, 255, 255, 0.8);
+            }
+        }
+        
+        @keyframes cometRotate {
+            0% { 
+                filter: hue-rotate(0deg) blur(0.3px);
+            }
+            100% { 
+                filter: hue-rotate(360deg) blur(0.3px);
+            }
+        }
+        
+        .comet-tail {
+            position: fixed;
+            pointer-events: none;
+            z-index: 10001;
+            border-radius: 50%;
+        }
+        
+        .comet-tail-particle {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #e879f9 40%, #a855f7 70%, #6366f1 100%);
+            box-shadow: 
+                0 0 15px rgba(232, 121, 249, 0.9),
+                0 0 25px rgba(168, 85, 247, 0.7),
+                0 0 35px rgba(99, 102, 241, 0.5);
+            will-change: transform, opacity, filter;
+            animation: tailParticleFade 1s ease-out forwards;
+        }
+        
+        .stardust {
+            position: fixed;
+            pointer-events: none;
+            z-index: 10000;
+            border-radius: 50%;
+            animation: stardustFloat 2s ease-in-out infinite;
+            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #fbbf24 40%, #f59e0b 70%, #d97706 100%);
+            box-shadow: 
+                0 0 12px rgba(251, 191, 36, 0.9),
+                0 0 20px rgba(245, 158, 11, 0.7),
+                0 0 30px rgba(217, 119, 6, 0.5);
+            will-change: transform, opacity, filter;
+        }
+        
+        .stardust.blue {
+            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #60a5fa 40%, #3b82f6 70%, #2563eb 100%);
+            box-shadow: 
+                0 0 12px rgba(96, 165, 250, 0.9),
+                0 0 20px rgba(59, 130, 246, 0.7),
+                0 0 30px rgba(37, 99, 235, 0.5);
+        }
+        
+        .stardust.purple {
+            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #c084fc 40%, #a855f7 70%, #9333ea 100%);
+            box-shadow: 
+                0 0 12px rgba(192, 132, 252, 0.9),
+                0 0 20px rgba(168, 85, 247, 0.7),
+                0 0 30px rgba(147, 51, 234, 0.5);
+        }
+        
+        @keyframes stardustFloat {
+            0%, 100% { 
+                transform: translateY(0) scale(1) rotate(0deg);
+                opacity: 0.8;
+            }
+            50% { 
+                transform: translateY(-8px) scale(1.3) rotate(180deg);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes tailParticleFade {
+            0% {
+                opacity: 0.9;
+                filter: blur(0px) hue-rotate(0deg);
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.6;
+                filter: blur(0.5px) hue-rotate(90deg);
+                transform: scale(0.8);
+            }
+            100% {
+                opacity: 0;
+                filter: blur(2px) hue-rotate(180deg);
+                transform: scale(0.3);
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-200">
+    <div id="cursor-glow" class="cursor-glow"></div>
+    <div id="comet-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10001;"></div>
+    <div id="stardust-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10000;"></div>
+    <div id="particles" class="fixed inset-0 pointer-events-none overflow-hidden z-0"></div>
+    
+    <div class="relative z-10 min-h-screen">
+        <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-indigo-500/20">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-500/30 flex items-center justify-center pulse-glow">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold solid-text glitch">Freedom API</h1>
+                            <p class="text-xs text-slate-400">测试报告</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="hidden md:flex items-center space-x-2 text-sm text-slate-400">
+                            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                            <span>所有测试通过</span>
+                        </div>
+                        <button onclick="exportReport()" class="magnetic-btn px-6 py-2.5 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-semibold transition-all duration-300">
+                            导出报告
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+            <div id="report-content"></div>
+        </main>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay">
+        <div id="modal-content" class="modal-content glass rounded-3xl p-8 max-w-5xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide"></div>
+    </div>
+
+    <script>
+        // ============================================================
+        // 彗星指针修复方案说明
+        // ============================================================
+        // 
+        // 问题1：彗星跳回原点
+        // 原因：loadReport()函数中的setTimeout(initCursor, 100)导致initCursor被重复调用
+        // 解决：移除重复的initCursor调用，仅在initApp()中初始化一次
+        //
+        // 问题2：彗星固定在左上角
+        // 原因：CSS中的animation: cometPulse和cometRotate会不断重置transform
+        // 解决：移除CSS动画，让transform能够正常工作
+        //
+        // 问题3：彗星变回指针
+        // 原因：CSS规则不够严格，缺少!important标记
+        // 解决：使用!important确保优先级最高
+        //
+        // 问题4：开发者工具检测逻辑错误
+        // 原因：条件判断错误，没有正确检测开发者工具状态
+        // 解决：修正条件判断，添加详细日志
+        //
+        // 问题5：硬件加速检测导致误判
+        // 原因：硬件加速检测逻辑复杂且不可靠
+        // 解决：移除硬件加速检测，仅基于开发者模式切换指针
+        //
+        // 调试模式：DEBUG_MODE = true时，开发者工具打开时仍显示彗星
+        // ============================================================
+        
+        let reportData = null;
+        let mouseX = 0;
+        let mouseY = 0;
+        let isHovering = false;
+        let isClicking = false;
+        let lastMouseMoveTime = 0;
+        const mouseMoveThrottle = 16;
+        
+        let audioContext = null;
+        let audioInitialized = false;
+        
+        let cometHead = null;
+        let tailParticles = [];
+        let stardustParticles = [];
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let animationFrameId = null;
+        let lastTailUpdate = 0;
+        let lastStardustUpdate = 0;
+        let particlePool = [];
+        const MAX_TAIL_PARTICLES = 50;
+        const MAX_STARDUST_PARTICLES = 30;
+        
+        // Particle pool for performance optimization
+        const PARTICLE_POOL_SIZE = 100;
+        let particlePoolInitialized = false;
+        
+        let eventListeners = [];
+        let devToolsOpen = false;
+        let devToolsCheckInterval = null;
+        
+        // Debug mode: set to true to allow comet cursor even when DevTools is open
+        const DEBUG_MODE = true;
+        
+        // Performance monitoring variables
+        let frameCount = 0;
+        let lastFrameCheckTime = 0;
+        let currentFps = 60;
+        const FPS_THRESHOLD = 45;
+        const PERFORMANCE_CHECK_INTERVAL = 2000;
+        let isLowPerformance = false; // Default to false to show effects initially
+        let lastPerformanceCheck = 0;
+        let animationRunning = false;
+        
+        function addCustomEventListener(element, event, handler, options = {}) {
+            element.addEventListener(event, handler, options);
+            eventListeners.push({ element, event, handler, options });
+        }
+        
+        function removeAllEventListeners() {
+            eventListeners.forEach(({ element, event, handler, options }) => {
+                element.removeEventListener(event, handler, options);
+            });
+            eventListeners = [];
+        }
+        
+        function cleanup() {
+            if (devToolsCheckInterval) {
+                clearInterval(devToolsCheckInterval);
+                devToolsCheckInterval = null;
+            }
+            
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            
+            tailParticles.forEach(p => {
+                if (p.element && p.element.parentNode) {
+                    p.element.parentNode.removeChild(p.element);
+                }
+            });
+            tailParticles = [];
+            
+            stardustParticles.forEach(p => {
+                if (p.element && p.element.parentNode) {
+                    p.element.parentNode.removeChild(p.element);
+                }
+            });
+            stardustParticles = [];
+            
+            particlePool.forEach(p => {
+                if (p && p.parentNode) {
+                    p.parentNode.removeChild(p);
+                }
+            });
+            particlePool = [];
+            
+            removeAllEventListeners();
+            
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close();
+            }
+        }
+        
+        window.addEventListener('beforeunload', cleanup);
+        window.addEventListener('pagehide', cleanup);
+        
+        function detectDevTools() {
+            // Increased threshold to reduce false positives (300px instead of 250px)
+            const widthThreshold = 300;
+            const heightThreshold = 200;
+            let devToolsCounter = 0;
+            const MAX_FALSE_POSITIVES = 2; // Reduced from 3 for faster detection
+            
+            const checkAndUpdateDevTools = () => {
+                const widthDiff = window.outerWidth - window.innerWidth;
+                const heightDiff = window.outerHeight - window.innerHeight;
+                
+                const isDevToolsOpen = (widthDiff > widthThreshold) || (heightDiff > heightThreshold);
+                
+                
+                if (isDevToolsOpen) {
+                    devToolsCounter++;
+                    // Only mark as devtools open if detected multiple times
+                    if (devToolsCounter >= MAX_FALSE_POSITIVES && !devToolsOpen) {
+                        devToolsOpen = true;
+                        
+                        // In DEBUG mode, don't disable the comet cursor
+                        if (DEBUG_MODE) {
+                            document.body.classList.add('devtools-open');
+                        } else {
+                            document.body.classList.add('devtools-open');
+                            // Hide all cursor-related elements
+                            const cursorElements = document.querySelectorAll('.cursor-glow, .comet-head, .comet-tail-particle, .stardust');
+                            cursorElements.forEach(el => el.style.display = 'none');
+                        }
+                    }
+                } else {
+                    devToolsCounter = 0;
+                    if (devToolsOpen) {
+                        devToolsOpen = false;
+                        document.body.classList.remove('devtools-open');
+                        // Show all cursor-related elements
+                        const cursorElements = document.querySelectorAll('.cursor-glow, .comet-head, .comet-tail-particle, .stardust');
+                        cursorElements.forEach(el => el.style.display = '');
+                    }
+                }
+            };
+            
+            // Check on resize, but with debounce
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(checkAndUpdateDevTools, 200);
+            });
+            
+            // Check on focus change as well
+            window.addEventListener('focus', () => {
+                setTimeout(checkAndUpdateDevTools, 100);
+            });
+            
+            // Initial check
+            checkAndUpdateDevTools();
+            
+            // Check periodically, but less frequently
+            const checkDevTools = setInterval(() => {
+                checkAndUpdateDevTools();
+            }, 1500);
+            
+            // Run for 30 seconds then stop
+            setTimeout(() => clearInterval(checkDevTools), 30000);
+        }
+        
+        function initParticlePool() {
+            if (particlePoolInitialized) return;
+            
+            for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
+                const particle = document.createElement('div');
+                particle.style.display = 'none';
+                particle.style.position = 'fixed';
+                particle.style.pointerEvents = 'none';
+                particle.style.borderRadius = '50%';
+                particle.style.zIndex = '10000';
+                document.body.appendChild(particle);
+                particlePool.push(particle);
+            }
+            
+            particlePoolInitialized = true;
+        }
+        
+        function getParticleFromPool() {
+            if (!particlePoolInitialized) {
+                initParticlePool();
+            }
+            
+            for (let i = 0; i < particlePool.length; i++) {
+                if (particlePool[i].style.display === 'none') {
+                    return particlePool[i];
+                }
+            }
+            
+            // If no available particles, create a new one
+            const particle = document.createElement('div');
+            particle.style.position = 'fixed';
+            particle.style.pointerEvents = 'none';
+            particle.style.borderRadius = '50%';
+            particle.style.zIndex = '10000';
+            document.body.appendChild(particle);
+            return particle;
+        }
+        
+        function returnParticleToPool(particle) {
+            particle.style.display = 'none';
+            particle.className = '';
+            particle.style.background = '';
+            particle.style.boxShadow = '';
+            particle.style.width = '';
+            particle.style.height = '';
+            particle.style.left = '';
+            particle.style.top = '';
+            particle.style.opacity = '';
+            particle.style.transform = '';
+            particle.style.animation = '';
+            particle.style.filter = '';
+        }
+        
+        function initComet() {
+            if (cometHead) {
+                return;
+            }
+            
+            const container = document.getElementById('comet-container');
+            cometHead = document.createElement('div');
+            cometHead.className = 'comet-head';
+            
+            // Ensure we have valid mouse coordinates
+            const currentX = mouseX || window.innerWidth / 2;
+            const currentY = mouseY || window.innerHeight / 2;
+            
+            cometHead.style.transform = `translate(${currentX - 12}px, ${currentY - 12}px)`;
+            cometHead.style.willChange = 'transform';
+            // Don't set left and top - let CSS handle positioning with transform
+            cometHead.style.position = 'fixed';
+            container.appendChild(cometHead);
+        }
+        
+        function updateComet() {
+            // This function is now only used to ensure comet exists
+            // Position updates are handled in the animation loop
+            if (!cometHead) {
+                initComet();
+            }
+        }
+        
+        function createCometTail() {
+            const now = Date.now();
+            if (now - lastTailUpdate < 15) {
+                return;
+            }
+            lastTailUpdate = now;
+            
+            const dx = mouseX - lastMouseX;
+            const dy = mouseY - lastMouseY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Reduce minimum distance required for particle creation
+            if (distance < 1.5) {
+                return;
+            }
+            
+            if (tailParticles.length >= MAX_TAIL_PARTICLES) {
+                const oldParticle = tailParticles.shift();
+                returnParticleToPool(oldParticle.element);
+            }
+            
+            const particle = getParticleFromPool();
+            particle.className = 'comet-tail-particle';
+            const size = Math.random() * 6 + 3;
+            particle.style.width = size + 'px';
+            particle.style.height = size + 'px';
+            particle.style.left = mouseX - size / 2 + 'px';
+            particle.style.top = mouseY - size / 2 + 'px';
+            particle.style.opacity = '0.9';
+            particle.style.display = 'block';
+            
+            // Calculate velocity based on mouse movement
+            const velocity = Math.min(distance * 0.15, 8);
+            const angle = Math.atan2(dy, dx);
+            
+            tailParticles.push({
+                element: particle,
+                x: mouseX,
+                y: mouseY,
+                opacity: 0.9,
+                size: size,
+                dx: Math.cos(angle) * velocity,
+                dy: Math.sin(angle) * velocity,
+                createdAt: now,
+                lifetime: 1000 + Math.random() * 500
+            });
+            
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+        }
+        
+        function createStardust() {
+            const now = Date.now();
+            if (now - lastStardustUpdate < 40) {
+                return;
+            }
+            lastStardustUpdate = now;
+            
+            if (stardustParticles.length >= MAX_STARDUST_PARTICLES) {
+                const oldParticle = stardustParticles.shift();
+                returnParticleToPool(oldParticle.element);
+            }
+            
+            const particle = getParticleFromPool();
+            
+            // Randomly choose stardust color variant
+            const colorVariants = ['', 'blue', 'purple'];
+            const randomVariant = colorVariants[Math.floor(Math.random() * colorVariants.length)];
+            particle.className = 'stardust' + (randomVariant ? ' ' + randomVariant : '');
+            
+            const size = Math.random() * 4 + 1;
+            particle.style.width = size + 'px';
+            particle.style.height = size + 'px';
+            
+            // Create stardust in a circular pattern around mouse
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * 20 + 10;
+            const offsetX = Math.cos(angle) * distance;
+            const offsetY = Math.sin(angle) * distance;
+            
+            particle.style.left = (mouseX - size / 2 + offsetX) + 'px';
+            particle.style.top = (mouseY - size / 2 + offsetY) + 'px';
+            particle.style.opacity = '1';
+            
+            // Random animation duration for variety
+            particle.style.animationDuration = (1.5 + Math.random() * 1) + 's';
+            particle.style.display = 'block';
+            
+            stardustParticles.push({
+                element: particle,
+                x: mouseX + offsetX,
+                y: mouseY + offsetY,
+                opacity: 1,
+                size: size,
+                dx: (Math.random() - 0.5) * 20,
+                dy: (Math.random() - 0.5) * 20,
+                createdAt: now
+            });
+        }
+        
+        function initAudio() {
+            if (!audioInitialized && audioContext === null) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    audioInitialized = true;
+                } catch (err) {
+                    console.error('AudioContext init error:', err);
+                }
+            }
+        }
+        
+        function playHoverSound() {
+            initAudio();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // 柔和的hover音效：正弦波，营造现代感
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.08);
+            
+            // 温和的音量衰减
+            gainNode.gain.setValueAtTime(0.08, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.08);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.08);
+        }
+        
+        function playClickSound() {
+            initAudio();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // 清晰的click音效：三角波，营造确认感
+            oscillator.type = 'triangle';
+            oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.06);
+            
+            // 温和的音量衰减
+            gainNode.gain.setValueAtTime(0.12, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.06);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.06);
+        }
+        
+        addCustomEventListener(document, 'mousemove', (e) => {
+            const now = Date.now();
+            if (now - lastMouseMoveTime < mouseMoveThrottle) {
+                return;
+            }
+            lastMouseMoveTime = now;
+            
+            // Update mouse position
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // Create particles only if performance is good
+            if (!isLowPerformance) {
+                createCometTail();
+                createStardust();
+            }
+        });
+        
+        function updateFpsCounter() {
+            frameCount++;
+            const now = Date.now();
+            if (now - lastFrameCheckTime >= PERFORMANCE_CHECK_INTERVAL) {
+                currentFps = (frameCount * 1000) / (now - lastFrameCheckTime);
+                frameCount = 0;
+                lastFrameCheckTime = now;
+            }
+        }
+        
+        function checkPerformance() {
+            const now = Date.now();
+            if (now - lastPerformanceCheck < PERFORMANCE_CHECK_INTERVAL) {
+                return;
+            }
+            lastPerformanceCheck = now;
+            
+            const oldLowPerformance = isLowPerformance;
+            // Only use FPS for performance check, don't disable effects based on hardware acceleration alone
+            // Also check if we have enough data (frameCount > 0) to avoid false positives on startup
+            isLowPerformance = currentFps < FPS_THRESHOLD && frameCount > 0;
+            
+            
+            if (isLowPerformance !== oldLowPerformance) {
+                if (isLowPerformance) {
+                    // Clear existing particles
+                    tailParticles.forEach(p => p.element.remove());
+                    stardustParticles.forEach(p => p.element.remove());
+                    tailParticles = [];
+                    stardustParticles = [];
+                }
+            }
+        }
+        
+        function animateTail() {
+            const now = Date.now();
+            animationRunning = true;
+            
+            updateFpsCounter();
+            checkPerformance();
+            
+            // Update visual positions - only if elements exist
+            if (cometHead) {
+                const transformValue = `translate(${mouseX - 12}px, ${mouseY - 12}px)`;
+                cometHead.style.transform = transformValue;
+            }
+            
+            const cursorGlow = document.getElementById('cursor-glow');
+            if (cursorGlow) {
+                const glowTransform = `translate(${mouseX}px, ${mouseY}px)`;
+                cursorGlow.style.transform = glowTransform;
+            }
+            
+            if (!isLowPerformance) {
+                tailParticles.forEach((p, index) => {
+                    const age = now - p.createdAt;
+                    const lifeProgress = age / p.lifetime;
+                    
+                    if (lifeProgress >= 1) {
+                        returnParticleToPool(p.element);
+                        tailParticles.splice(index, 1);
+                        return;
+                    }
+                    
+                    // Enhanced easing function for smoother fade
+                    p.opacity = Math.cos(lifeProgress * Math.PI / 2);
+                    p.x += p.dx * (1 - lifeProgress * 0.5);
+                    p.y += p.dy * (1 - lifeProgress * 0.5);
+                    
+                    // Apply friction that increases over time
+                    const friction = 0.92 + (lifeProgress * 0.05);
+                    p.dx *= friction;
+                    p.dy *= friction;
+                    
+                    p.element.style.opacity = p.opacity;
+                    p.element.style.transform = `translate(${p.x - p.size / 2}px, ${p.y - p.size / 2}px) scale(${p.opacity})`;
+                });
+                
+                stardustParticles.forEach((p, index) => {
+                    const age = (now - p.createdAt) / 1000;
+                    p.opacity = Math.max(0,1 - age * 0.4);
+                    p.x += p.dx * (1 - age * 0.2);
+                    p.y += p.dy * (1 - age * 0.2);
+                    
+                    p.dx *= 0.985;
+                    p.dy *= 0.985;
+                    
+                    p.element.style.opacity = p.opacity;
+                    p.element.style.transform = `translate(${p.x - p.size / 2}px, ${p.y - p.size / 2}px) rotate(${age * 180}deg)`;
+                    
+                    if (age > 3.5) {
+                        returnParticleToPool(p.element);
+                        stardustParticles.splice(index, 1);
+                    }
+                });
+            }
+            
+            animationFrameId = requestAnimationFrame(animateTail);
+        }
+        
+        // Initialize comet head on page load and after report data is loaded
+        function initCursor() {
+            // Set initial mouse position to center of screen (for initial display)
+            mouseX = window.innerWidth / 2;
+            mouseY = window.innerHeight / 2;
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+            
+            // Don't initialize comet head immediately - wait for first mouse move
+            // This ensures proper positioning and avoids initial offset issues
+            
+            // Set initial position for cursor glow
+            const cursorGlow = document.getElementById('cursor-glow');
+            if (cursorGlow) {
+                cursorGlow.style.transform = `translate(${mouseX}px, ${mouseY}px)`;
+            }
+        }
+        
+        // Start animation loop
+        function startAnimation() {
+            if (!animationRunning) {
+                animationRunning = true;
+                animateTail();
+            }
+        }
+        
+        // Initialize cursor when DOM is ready
+        function initApp() {
+            initParticlePool();
+            initCursor();
+            detectDevTools();
+            startAnimation();
+        }
+        
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            initApp();
+        }
+        
+        // Add a one-time event listener to initialize comet on first user interaction
+        function initCometOnInteraction(e) {
+            if (!cometHead) {
+                // Update mouse position from event if available
+                if (e && e.clientX !== undefined) {
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                    lastMouseX = mouseX;
+                    lastMouseY = mouseY;
+                }
+                initComet();
+            } else {
+                // Comet already initialized
+            }
+        }
+        
+        // Listen for first interaction
+        document.addEventListener('mousemove', initCometOnInteraction, { once: true });
+        document.addEventListener('touchstart', initCometOnInteraction, { once: true });
+        document.addEventListener('click', initCometOnInteraction, { once: true });
+        
+        addCustomEventListener(document, 'mousedown', () => {
+            isClicking = true;
+            playClickSound();
+        });
+        
+        addCustomEventListener(document, 'mouseup', () => {
+            isClicking = false;
+        });
+        
+        addCustomEventListener(document, 'mouseover', (e) => {
+            initAudio();
+            const target = e.target;
+            const clickable = target.closest('button, a, .chain-card, .test-item, .tab-btn');
+            
+            if (clickable && !isHovering) {
+                isHovering = true;
+                playHoverSound();
+            }
+        });
+        
+        addCustomEventListener(document, 'click', (e) => {
+            initAudio();
+        });
+        
+        addCustomEventListener(document, 'touchstart', (e) => {
+            initAudio();
+        });
+        
+        addCustomEventListener(document, 'keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // 内联数据，用于直接本地访问
+        const inlineReportData = {};
+
+        async function loadReport() {
+            try {
+                // 优先使用内联数据，避免跨域问题
+                if (typeof inlineReportData !== 'undefined' && Object.keys(inlineReportData).length > 0) {
+                    reportData = inlineReportData;
+                } else {
+                    // 如果内联数据不可用，尝试从网络加载
+                    let response;
+                    try {
+                        // 先尝试从当前目录加载增强报告数据文件
+                        response = await fetch('report_enhanced.json');
+                        if (!response.ok) throw new Error('当前目录加载失败');
+                    } catch (e1) {
+                        try {
+                            // 尝试从reports目录加载（兼容不同部署情况）
+                            response = await fetch('reports/report_enhanced.json');
+                            if (!response.ok) throw new Error('reports目录加载失败');
+                        } catch (e2) {
+                            // 直接使用内联数据作为最终备选，避免跨域问题
+                            throw new Error('无法从网络加载数据，且内联数据不可用');
+                        }
+                    }
+                    reportData = await response.json();
+                }
+                renderReport();
+                initMagneticEffect();
+                // Don't re-initialize cursor here - it's already initialized in initApp()
+                // This was causing cursor to jump back to center
+            } catch (error) {
+                console.error('Failed to load report:', error);
+                document.getElementById('report-content').innerHTML = `
+                    <div class="text-center py-20">
+                        <div class="text-6xl mb-4">⚠️</div>
+                        <h2 class="text-2xl font-bold text-red-400 mb-2">加载失败</h2>
+                        <p class="text-slate-400">无法加载测试报告数据</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderReport() {
+            const container = document.getElementById('report-content');
+            const metadata = reportData.report_metadata;
+            const coverage = reportData.coverage_stats;
+            
+            container.innerHTML = `
+                <div class="fade-in">
+                    <div class="glass rounded-3xl p-10 text-center shimmer mb-12">
+                        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/30 mb-6 pulse-glow float-animation">
+                            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <p class="text-slate-400 mb-6 text-lg">${metadata.total_exc_tests} 个测试用例已成功执行</p>
+                        <div class="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-400 mb-8">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 002-2h10a2 2 0 002-2V7a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002-2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2H5a2 2 0 00-2-2v12a2 2 0 01-2-2z"></path>
+                                </svg>
+                                <span>生成时间: <span class="text-slate-300 font-medium">${metadata.generated_at}</span></span>
+                            </div>
+                            <div class="w-px h-4 bg-slate-700"></div>
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0m8 4v8m-8-4v8m8-4a4 4 0 008 0m0 0h-8m8 0v8m-8-4v8m0 4a4 4 0 008 0m0 0v8m-8-4v8m0 4a4 4 0 008 0m0 0v8m-8-4v8"></path>
+                                </svg>
+                                <span>作者: <span class="text-slate-300 font-medium">${metadata.author}</span></span>
+                            </div>
+                            <div class="w-px h-4 bg-slate-700"></div>
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                                </svg>
+                                <span>AI模型: <span class="text-slate-300 font-medium">${metadata.ai_model}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                        ${renderMetricCard('总用例数', metadata.total_exc_tests, 'tests', '#6366f1', 0)}
+                        ${renderMetricCard('通过率', `${metadata.pass_rate}%`, 'percent', '#10b981', 1)}
+                        ${renderMetricCard('执行时间', `${metadata.total_execution_time}s`, 'time', '#f59e0b', 2)}
+                        ${renderMetricCard('端点覆盖', `${coverage.endpoint_coverage}%`, 'coverage', '#8b5cf6', 3)}
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
+                        ${renderChartCard('测试结果分布', 'chart-distribution', 4)}
+                        ${renderChartCard('覆盖率分析', 'chart-coverage', 5)}
+                    </div>
+
+                    <div class="mb-12">
+                        <h2 class="text-3xl font-bold mb-6 flex items-center">
+                            <span class="w-10 h-10 rounded-xl bg-indigo-500/30 flex items-center justify-center mr-4 pulse-glow">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                </svg>
+                            </span>
+                            <span class="solid-text">调用链分析</span>
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            ${reportData.call_chains.map((chain, index) => renderChainCard(chain, index)).join('')}
+                        </div>
+                    </div>
+
+                    <div class="mb-12">
+                        <h2 class="text-3xl font-bold mb-6 flex items-center">
+                            <span class="w-10 h-10 rounded-xl bg-green-500/30 flex items-center justify-center mr-4 pulse-glow">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2H5a2 2 0 00-2-2v12a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </span>
+                            <span class="solid-text">测试详情</span>
+                        </h2>
+                        <div class="glass rounded-2xl p-6">
+                            <div class="flex flex-wrap gap-2 mb-6">
+                                ${Object.keys(reportData.scenarios).map((key, index) => `
+                                    <button onclick="filterTests('${key}', this)" class="tab-btn px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${index === 0 ? 'active' : 'glass-light hover:bg-white/10'}">
+                                        ${reportData.scenarios[key].chain_name}
+                                    </button>
+                                `).join('')}
+                            </div>
+                            <div id="test-details" class="space-y-3 h-[420px] overflow-y-auto scrollbar-hide">
+                                ${renderTestDetails('auth_flow')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            initCharts();
+            initParticles();
+            initCard3DEffect();
+        }
+        
+        function renderMetricCard(title, value, icon, color, delay) {
+            const icons = {
+                tests: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2H5a2 2 0 00-2-2v12a2 2 0 01-2-2z"></path>',
+                percent: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002-2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2H5a2 2 0 00-2-2v12a2 2 0 01-2-2z"></path>',
+                time: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>',
+                coverage: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path>'
+            };
+            
+            const formulas = {
+                tests: '总用例数 = 通过数 + 失败数 + 跳过数',
+                percent: '通过率 = (通过数 / 总用例数) ×100%',
+                time: '执行时间 = Σ(每个用例的执行时间)',
+                coverage: '端点覆盖率 = (已测试端点数 / 总端点数) ×100%'
+            };
+            
+            return `
+                <div class="metric-card glass rounded-2xl p-6 slide-up" style="animation-delay: ${delay * 0.1}s">
+                    <div class="flex items-center justify-between mb-4 relative z-10">
+                        <div class="w-14 h-14 rounded-2xl flex items-center justify-center" style="background: ${color}20">
+                            <svg class="w-7 h-7" style="color: ${color}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                ${icons[icon]}
+                            </svg>
+                        </div>
+                        <span class="text-4xl font-bold" style="color: ${color}; text-shadow: 0 0 10px ${color}60;">${value}</span>
+                    </div>
+                    <div class="metric-title-wrapper flex items-center">
+                            <h3 class="text-slate-400 text-sm font-semibold relative z-10">${title}</h3>
+                            <div class="metric-info-icon ml-1">
+                                i
+                                <div class="metric-tooltip">${formulas[icon]}</div>
+                            </div>
+                        </div>
+                </div>
+            `;
+        }
+        
+        function renderChartCard(title, canvasId, delay) {
+            return `
+                <div class="glass rounded-2xl p-6 slide-up" style="animation-delay: ${delay * 0.1}s">
+                    <h3 class="text-xl font-bold mb-4">${title}</h3>
+                    <div class="chart-container relative h-72">
+                        <canvas id="${canvasId}"></canvas>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderChainCard(chain, index) {
+            const chainClasses = ['chain-auth', 'chain-service', 'chain-request', 'chain-payment', 'chain-info', 'chain-contact', 'chain-region', 'chain-dust', 'chain-report', 'chain-health', 'chain-ad'];
+            const scenario = reportData.scenarios[chain.chain_id];
+            
+            return `
+                <div class="chain-card scale-in ${chainClasses[index] || ''}" onclick="showChainDetails('${chain.chain_id}')">
+                    <div class="chain-card-inner glass rounded-2xl p-6 neon-border">
+                        <div class="flex items-center justify-between mb-4 flex-shrink-0">
+                            <div class="w-14 h-14 rounded-2xl bg-indigo-500/30 flex items-center justify-center">
+                                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                </svg>
+                            </div>
+                            <span class="status-badge px-4 py-1.5 rounded-full text-xs font-bold bg-green-500/20 text-green-400">
+                                ${scenario.passed_count}/${scenario.test_count} 通过
+                            </span>
+                        </div>
+                        <h3 class="text-xl font-bold mb-2 flex-shrink-0">${chain.chain_name}</h3>
+                        <p class="text-slate-400 text-sm mb-4 line-clamp-2 flex-grow-1">${chain.description}</p>
+                        <div class="flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
+                            <span>${chain.endpoints.length} 个端点</span>
+                            <span class="flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                ${chain.calls.reduce((sum, call) => sum + call.execution_time, 0).toFixed(2)}s
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderTestDetails(chainId) {
+            const scenario = reportData.scenarios[chainId];
+            return scenario.tests.map(test => `
+                <div class="test-item glass-light rounded-xl p-4 cursor-pointer" onclick="showTestDetail('${test.test_id}')">
+                    <div class="flex items-center justify-between relative z-10">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-sm">${test.title}</h4>
+                                <p class="text-xs text-slate-500 mono">${test.call_chain}</p>
+                            </div>
+                        </div>
+                        <div class="text-right relative z-10">
+                            <div class="text-xs text-slate-500">${test.execution_time}s</div>
+                            <div class="text-xs text-slate-400">${test.timestamp.split(' ')[1]}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function filterTests(chainId, btn) {
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(b => {
+                b.classList.remove('active');
+                b.classList.add('glass-light');
+            });
+            btn.classList.remove('glass-light');
+            btn.classList.add('active');
+            
+            const container = document.getElementById('test-details');
+            container.style.opacity = '0';
+            container.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                container.innerHTML = renderTestDetails(chainId);
+                container.style.opacity = '1';
+                container.style.transform = 'translateY(0)';
+            }, 300);
+        }
+        
+        // 检查容器滚动状态的函数
+        function updateScrollState(container) {
+            // 重置状态
+            container.classList.remove('can-scroll', 'can-scroll-vertical', 'can-scroll-horizontal', 'can-scroll-up', 'can-scroll-down');
+            
+            // 检查垂直滚动
+            const isVerticalScrollable = container.scrollHeight > container.clientHeight;
+            if (isVerticalScrollable) {
+                container.classList.add('can-scroll', 'can-scroll-vertical');
+                
+                // 检查是否可以向上滚动（已滚动过）
+                if (container.scrollTop > 1) { // 添加容差，解决Chrome浏览器精度问题
+                    container.classList.add('can-scroll-up');
+                }
+                
+                // 检查是否可以向下滚动（未到达底部）
+                if (container.scrollTop < container.scrollHeight - container.clientHeight - 1) { // 添加容差，解决Chrome浏览器精度问题
+                    container.classList.add('can-scroll-down');
+                }
+            }
+            
+            // 检查水平滚动
+            const isHorizontalScrollable = container.scrollWidth > container.clientWidth;
+            if (isHorizontalScrollable) {
+                container.classList.add('can-scroll', 'can-scroll-horizontal');
+            }
+            
+            // 检查容器的父包装器（如果存在）
+            const wrapper = container.closest('.scroll-container-wrapper');
+            if (wrapper) {
+                // 重置包装器状态
+                wrapper.classList.remove('can-scroll', 'can-scroll-vertical', 'can-scroll-horizontal', 'can-scroll-up', 'can-scroll-down');
+                
+                // 复制容器的滚动状态到包装器
+                if (container.classList.contains('can-scroll')) {
+                    wrapper.classList.add('can-scroll');
+                }
+                if (container.classList.contains('can-scroll-vertical')) {
+                    wrapper.classList.add('can-scroll-vertical');
+                }
+                if (container.classList.contains('can-scroll-horizontal')) {
+                    wrapper.classList.add('can-scroll-horizontal');
+                }
+                if (container.classList.contains('can-scroll-up')) {
+                    wrapper.classList.add('can-scroll-up');
+                }
+                if (container.classList.contains('can-scroll-down')) {
+                    wrapper.classList.add('can-scroll-down');
+                }
+            }
+        }
+        
+        // 简化的滚动检查函数，调用更新滚动状态
+        function checkScrollable(container) {
+            updateScrollState(container);
+        }
+        
+        // 初始化滚动指示器功能 - 全局函数
+        function initScrollIndicators() {
+            // 获取所有滚动容器
+            const scrollContainers = document.querySelectorAll('.scroll-container');
+            
+            // 为每个滚动容器添加滚动事件监听和可滚动检查
+            scrollContainers.forEach(container => {
+                // 检查容器是否有包装器
+                const wrapper = container.closest('.scroll-container-wrapper');
+                
+                // 移除已存在的指示器，避免重复
+                container.querySelectorAll('.scroll-indicator').forEach(ind => ind.remove());
+                if (wrapper) {
+                    wrapper.querySelectorAll('.scroll-indicator').forEach(ind => ind.remove());
+                }
+                
+                // 创建向上滚动指示器
+                const upIndicator = document.createElement('div');
+                upIndicator.className = 'scroll-indicator up';
+                upIndicator.innerHTML = '<div class="scroll-arrow up"></div>';
+                
+                // 创建向下滚动指示器
+                const downIndicator = document.createElement('div');
+                downIndicator.className = 'scroll-indicator down';
+                downIndicator.innerHTML = '<div class="scroll-arrow down"></div>';
+                
+                // 检查是否在模态框中
+                const isInModal = container.closest('.modal-content');
+                
+                // 根据情况将指示器添加到包装器或容器
+                if (wrapper) {
+                    // 如果有包装器，将指示器添加到包装器
+                    wrapper.appendChild(upIndicator);
+                    wrapper.appendChild(downIndicator);
+                } else {
+                    // 如果没有包装器，将指示器添加到容器
+                    container.appendChild(upIndicator);
+                    container.appendChild(downIndicator);
+                }
+                
+                // 为容器添加滚动事件监听
+                container.addEventListener('scroll', function() {
+                    // 更新滚动状态
+                    updateScrollState(container);
+                    
+                    // 检查是否滚动
+                    if (this.scrollTop > 10 || this.scrollLeft > 10) {
+                        this.classList.add('scrolled');
+                    } else {
+                        this.classList.remove('scrolled');
+                    }
+                });
+                
+                // 监听窗口大小变化，重新检查可滚动性
+                window.addEventListener('resize', () => updateScrollState(container));
+                
+                // 强制重绘容器，确保scrollHeight正确计算
+                container.style.display = 'none';
+                container.offsetHeight; // 触发重排
+                container.style.display = '';
+                
+                // 检查是否可滚动
+                updateScrollState(container);
+            });
+        }
+        
+        // 页面加载完成后初始化滚动指示器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 延迟初始化，确保所有内容都已加载
+            setTimeout(initScrollIndicators, 500);
+        });
+        
+        // 当显示模态框时重新初始化滚动指示器
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.chain-card') || e.target.closest('.test-item')) {
+                setTimeout(initScrollIndicators, 300);
+            }
+        });
+        
+        function initCharts() {
+            const metadata = reportData.report_metadata;
+            const coverage = reportData.coverage_stats;
+            
+            new Chart(document.getElementById('chart-distribution'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['通过', '失败', '跳过'],
+                    datasets: [{
+                        data: [metadata.passed, metadata.failed, metadata.skipped],
+                        backgroundColor: ['#10b981', '#ef4444', '#64748b'],
+                        borderWidth: 0,
+                        hoverOffset: 15
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#94a3b8',
+                                padding: 24,
+                                usePointStyle: true,
+                                font: {
+                                    size: 14,
+                                    weight: '500'
+                                }
+                            }
+                        }
+                    },
+                    cutout: '70%',
+                    animation: {
+                        animateScale: true,
+                        animateRotate: true
+                    }
+                }
+            });
+            
+            new Chart(document.getElementById('chart-coverage'), {
+                type: 'bar',
+                data: {
+                    labels: ['端点覆盖', '场景覆盖', '调用链覆盖'],
+                    datasets: [{
+                        label: '覆盖率 (%)',
+                        data: [coverage.endpoint_coverage, coverage.scenario_coverage, coverage.call_chain_coverage],
+                        backgroundColor: [
+                            'rgba(99, 102, 241, 0.8)',
+                            'rgba(139, 92, 246, 0.8)',
+                            'rgba(236, 72, 153, 0.8)'
+                        ],
+                        borderRadius: 12,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#94a3b8',
+                            borderColor: 'rgba(99, 102, 241, 0.3)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: {
+                                color: 'rgba(148, 163, 184, 0.1)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: {
+                                    size: 12
+                                },
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: {
+                                    size: 13,
+                                    weight: '500'
+                                }
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1500,
+                        easing: 'easeOutQuart'
+                    }
+                },
+                // 使用Chart.js的插件系统添加数据标签
+                plugins: [{
+                    id: 'displayValues',
+                    afterDraw: function(chart) {
+                        const ctx = chart.ctx;
+                        const datasets = chart.data.datasets;
+                        
+                        for (let i = 0; i < datasets.length; i++) {
+                            const dataset = datasets[i];
+                            const meta = chart.getDatasetMeta(i);
+                            
+                            if (!meta.hidden) {
+                                for (let j = 0; j < meta.data.length; j++) {
+                                    const element = meta.data[j];
+                                    const value = dataset.data[j];
+                                    
+                                    // 计算柱子顶部中心位置
+                                    const x = element.x;
+                                    const y = element.y;
+                                    
+                                    // 设置文字样式
+                                    ctx.save();
+                                    ctx.font = 'bold 14px Inter';
+                                    ctx.fillStyle = '#ffffff';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'bottom';
+                                    
+                                    // 绘制数值
+                                    ctx.fillText(value + '%', x, y - 10);
+                                    ctx.restore();
+                                }
+                            }
+                        }
+                    }
+                }]
+            });
+        }
+        
+        function initParticles() {
+            const container = document.getElementById('particles');
+            const particleCount = 30;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.opacity = Math.random() * 0.5 + 0.1;
+                particle.style.willChange = 'transform, opacity';
+                
+                const duration = (Math.random() * 20 + 15) * 1000;
+                const delay = Math.random() * 5 * 1000;
+                
+                particle.animate([
+                    { transform: 'translate(0, 0)', opacity: particle.style.opacity },
+                    { transform: `translate(${Math.random() * 200 - 100}px, ${Math.random() * 200 - 100}px)`, opacity: 0 }
+                ], {
+                    duration: duration,
+                    iterations: Infinity,
+                    delay: delay
+                });
+                
+                container.appendChild(particle);
+            }
+        }
+        
+        function initCard3DEffect() {
+            const cards = document.querySelectorAll('.chain-card');
+            
+            cards.forEach(card => {
+                addCustomEventListener(card, 'mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    const rotateX = (y - centerY) / 10;
+                    const rotateY = (centerX - x) / 10;
+                    
+                    // Use CSS variables to apply transform, allowing CSS hover to work
+                    card.style.setProperty('--rotate-x', `${rotateX}deg`);
+                    card.style.setProperty('--rotate-y', `${rotateY}deg`);
+                    const inner = card.querySelector('.chain-card-inner');
+                    inner.style.setProperty('--rotate-x', `${rotateX}deg`);
+                    inner.style.setProperty('--rotate-y', `${rotateY}deg`);
+                });
+                
+                addCustomEventListener(card, 'mouseleave', () => {
+                    // Reset CSS variables
+                    card.style.setProperty('--rotate-x', '0deg');
+                    card.style.setProperty('--rotate-y', '0deg');
+                    const inner = card.querySelector('.chain-card-inner');
+                    inner.style.setProperty('--rotate-x', '0deg');
+                    inner.style.setProperty('--rotate-y', '0deg');
+                });
+            });
+        }
+        
+        function initMagneticEffect() {
+            const magneticElements = document.querySelectorAll('.magnetic-btn');
+            
+            magneticElements.forEach(element => {
+                addCustomEventListener(element, 'mousemove', (e) => {
+                    const rect = element.getBoundingClientRect();
+                    const x = e.clientX - rect.left - rect.width / 2;
+                    const y = e.clientY - rect.top - rect.height / 2;
+                    
+                    element.style.transform = `translate(${x * 0.3}px, ${y * 0.3}px)`;
+                });
+                
+                addCustomEventListener(element, 'mouseleave', () => {
+                    element.style.transform = 'translate(0, 0)';
+                });
+                
+                addCustomEventListener(element, 'click', (e) => {
+                    const rect = element.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    const ripple = document.createElement('span');
+                    ripple.className = 'ripple';
+                    ripple.style.left = x + 'px';
+                    ripple.style.top = y + 'px';
+                    
+                    element.appendChild(ripple);
+                    
+                    setTimeout(() => ripple.remove(), 600);
+                });
+            });
+        }
+        
+        function showChainDetails(chainId) {
+            const chain = reportData.call_chains.find(c => c.chain_id === chainId);
+            const scenario = reportData.scenarios[chainId];
+            
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            
+            content.innerHTML = `
+                <button onclick="closeModal()" class="absolute top-4 right-4 w-12 h-12 rounded-2xl glass-light flex items-center justify-center hover:bg-white/20 transition-all duration-300 z-10">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                <div class="mb-6">
+                    <h2 class="text-3xl font-black gradient-text mb-2">${chain.chain_name}</h2>
+                    <p class="text-slate-400">${chain.description}</p>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div class="glass-light rounded-2xl p-5 text-center shimmer">
+                        <div class="text-3xl font-black text-indigo-400">${scenario.test_count}</div>
+                        <div class="text-xs text-slate-500 font-medium">测试数</div>
+                    </div>
+                    <div class="glass-light rounded-2xl p-5 text-center shimmer">
+                        <div class="text-3xl font-black text-green-400">${scenario.passed_count}</div>
+                        <div class="text-xs text-slate-500 font-medium">通过</div>
+                    </div>
+                    <div class="glass-light rounded-2xl p-5 text-center shimmer">
+                        <div class="text-3xl font-black text-red-400">${scenario.failed_count}</div>
+                        <div class="text-xs text-slate-500 font-medium">失败</div>
+                    </div>
+                    <div class="glass-light rounded-2xl p-5 text-center shimmer">
+                        <div class="text-3xl font-black text-purple-400">${chain.endpoints.length}</div>
+                        <div class="text-xs text-slate-500 font-medium">端点</div>
+                    </div>
+                </div>
+                <h3 class="text-xl font-bold mb-4">端点列表</h3>
+                <div class="space-y-3 mb-8">
+                    ${chain.endpoints.map(endpoint => `
+                        <div class="glass-light rounded-xl p-4 mono text-sm hover:bg-white/10 transition-all duration-300">
+                            <span class="text-indigo-400 font-bold">${endpoint.split(' ')[0]}</span>
+                            <span class="text-slate-300">${endpoint.split(' ')[1]}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <h3 class="text-xl font-bold mb-4">调用详情</h3>
+                <div class="space-y-4 max-h-96 overflow-y-auto scrollbar-hide">
+                    ${chain.calls.map(call => `
+                        <div class="glass-light rounded-xl p-5 hover:bg-white/5 transition-all duration-300">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="mono text-sm font-semibold">
+                                    <span class="px-3 py-1 rounded-lg text-xs font-bold ${call.method === 'GET' ? 'bg-blue-500/20 text-blue-400' : call.method === 'POST' ? 'bg-green-500/20 text-green-400' : call.method === 'PUT' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}">${call.method}</span>
+                                    <span class="ml-3 text-slate-300">${call.endpoint}</span>
+                                </span>
+                                <span class="text-xs font-bold ${call.status_code >= 200 && call.status_code < 300 ? 'text-green-400' : 'text-red-400'}">${call.status_code}</span>
+                            </div>
+                            <div class="text-xs text-slate-500 mb-3">执行时间: ${call.execution_time}s</div>
+                            <div class="code-block">
+                                <div class="text-xs text-slate-400 mb-2 font-semibold">请求体:</div>
+                                <pre class="text-xs text-slate-300 overflow-x-auto">${call.request_body ? JSON.stringify(call.request_body, null, 2) : 'null'}</pre>
+                            </div>
+                            <div class="code-block mt-3">
+                                <div class="text-xs text-slate-400 mb-2 font-semibold">响应体:</div>
+                                <pre class="text-xs text-slate-300 overflow-x-auto">${JSON.stringify(call.response_body, null, 2)}</pre>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            overlay.classList.add('active');
+        }
+        
+        function showTestDetail(testId) {
+            const test = reportData.test_results.find(t => t.test_id === testId);
+            
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            
+            content.innerHTML = `
+                <button onclick="closeModal()" class="absolute top-4 right-4 w-12 h-12 rounded-2xl glass-light flex items-center justify-center hover:bg-white/20 transition-all duration-300 z-10">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                <div class="mb-6">
+                    <h2 class="text-3xl font-black gradient-text mb-2">${test.title}</h2>
+                    <p class="text-slate-400">${test.description}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-8">
+                    <div class="glass-light rounded-2xl p-5 shimmer">
+                        <div class="text-xs text-slate-500 mb-2 font-medium">状态</div>
+                        <div class="flex items-center space-x-3">
+                            <span class="w-4 h-4 rounded-full ${test.status === 'passed' ? 'bg-green-500' : 'bg-red-500'}"></span>
+                            <span class="font-bold text-lg">${test.status === 'passed' ? '通过' : '失败'}</span>
+                        </div>
+                    </div>
+                    <div class="glass-light rounded-2xl p-5 shimmer">
+                        <div class="text-xs text-slate-500 mb-2 font-medium">执行时间</div>
+                        <div class="font-bold text-lg">${test.execution_time}s</div>
+                    </div>
+                </div>
+                <div class="glass-light rounded-2xl p-5 mb-8">
+                    <div class="text-xs text-slate-500 mb-2 mono">${test.class_method}</div>
+                    <div class="text-sm text-slate-300 font-semibold">${test.call_chain}</div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <h3 class="text-xl font-bold mb-4">输入参数</h3>
+                        <div class="code-block">
+                            <pre class="text-xs text-slate-300 overflow-x-auto">${JSON.stringify(test.input_params, null, 2)}</pre>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-4">输出参数</h3>
+                        <div class="code-block">
+                            <pre class="text-xs text-slate-300 overflow-x-auto">${JSON.stringify(test.output_params, null, 2)}</pre>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-8">
+                    <h3 class="text-xl font-bold mb-4">断言信息</h3>
+                    <div class="space-y-3">
+                        ${test.assertion_info.map(assertion => `
+                            <div class="glass-light rounded-xl p-4 flex items-center justify-between hover:bg-white/5 transition-all duration-300">
+                                <span class="text-sm text-slate-300 font-medium">${assertion.type}</span>
+                                <span class="flex items-center space-x-3">
+                                    <span class="text-xs text-slate-500">期望: ${assertion.expected}</span>
+                                    <span class="text-xs text-slate-500">实际: ${assertion.actual}</span>
+                                    <span class="w-3 h-3 rounded-full ${assertion.result ? 'bg-green-500' : 'bg-red-500'}"></span>
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            overlay.classList.add('active');
+        }
+        
+        function closeModal() {
+            const overlay = document.getElementById('modal-overlay');
+            overlay.classList.remove('active');
+        }
+        
+        addCustomEventListener(document.getElementById('modal-overlay'), 'click', (e) => {
+            if (e.target.id === 'modal-overlay') {
+                closeModal();
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+        
+        function exportReport() {
+            const dataStr = JSON.stringify(reportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'freedom-api-test-report.json';
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        loadReport();
+    </script>
+</body>
+</html>

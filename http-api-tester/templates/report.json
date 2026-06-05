@@ -1,0 +1,1349 @@
+{
+  "report_metadata": {
+    "author": "hailong.chen",
+    "ai_model": "GLM-4.7",
+    "language_stack": "Python 3.11+",
+    "test_framework": "pytest",
+    "generated_at": "2026-01-28 22:03:50",
+    "total_analyzed_scenarios": 6,
+    "total_test_cases": 7,
+    "total_http_endpoint": 6,
+    "total_exc_tests": 7,
+    "total_exc_endpoint": 6,
+    "total_tests": 7,
+    "total_scenarios": 6,
+    "total_endpoints_tested": 6,
+    "passed": 0,
+    "failed": 7,
+    "skipped": 0,
+    "pass_rate": 0.0,
+    "total_execution_time": 0,
+    "project_name": "freedom",
+    "passed_scenarios": 0,
+    "failed_scenarios": 6,
+    "skipped_scenarios": 0,
+    "scenario_pass_rate": 0.0
+  },
+  "test_results": [
+    {
+      "test_id": "test_successful_user_registration_flow",
+      "title": "test_successful_user_registration_flow",
+      "description": "\n    测试场景 1: 成功的用户注册流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me\n    ",
+      "business_info": "成功的用户注册流程",
+      "file_name": "test_auth.py",
+      "class_method": "tests.testcases.test_auth#test_successful_user_registration_flow",
+      "status": "failed",
+      "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me",
+      "assertion_info": [],
+      "input_params": {},
+      "output_params": {},
+      "execution_time": 0,
+      "timestamp": "2026-01-28 22:03:50"
+    },
+    {
+      "test_id": "test_registration_with_invalid_verification_code",
+      "title": "test_registration_with_invalid_verification_code",
+      "description": "\n    测试场景 2: 使用无效验证码注册\n    调用链: POST /auth/register\n    ",
+      "business_info": "使用无效验证码注册",
+      "file_name": "test_auth.py",
+      "class_method": "tests.testcases.test_auth#test_registration_with_invalid_verification_code",
+      "status": "failed",
+      "call_chain": "POST /auth/register",
+      "assertion_info": [],
+      "input_params": {},
+      "output_params": {},
+      "execution_time": 0,
+      "timestamp": "2026-01-28 22:03:50"
+    },
+    {
+      "test_id": "test_registration_with_expired_code",
+      "title": "test_registration_with_expired_code",
+      "description": "\n    测试场景 3: 使用过期验证码注册\n    调用链: POST /auth/register\n    ",
+      "business_info": "使用过期验证码注册",
+      "file_name": "test_auth.py",
+      "class_method": "tests.testcases.test_auth#test_registration_with_expired_code",
+      "status": "failed",
+      "call_chain": "POST /auth/register",
+      "assertion_info": [],
+      "input_params": {},
+      "output_params": {},
+      "execution_time": 0,
+      "timestamp": "2026-01-28 22:03:50"
+    },
+    {
+      "test_id": "test_login_with_invalid_credentials",
+      "title": "test_login_with_invalid_credentials",
+      "description": "\n    测试场景 4: 使用无效凭证登录\n    调用链: POST /auth/token\n    ",
+      "business_info": "使用无效凭证登录",
+      "file_name": "test_auth.py",
+      "class_method": "tests.testcases.test_auth#test_login_with_invalid_credentials",
+      "status": "failed",
+      "call_chain": "POST /auth/token",
+      "assertion_info": [],
+      "input_params": {},
+      "output_params": {},
+      "execution_time": 0,
+      "timestamp": "2026-01-28 22:03:50"
+    },
+    {
+      "test_id": "test_forgot_password_flow",
+      "title": "test_forgot_password_flow",
+      "description": "\n    测试场景 7: 忘记密码流程\n    调用链: POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset\n    ",
+      "business_info": "忘记密码流程",
+      "file_name": "test_auth.py",
+      "class_method": "tests.testcases.test_auth#test_forgot_password_flow",
+      "status": "failed",
+      "call_chain": "POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset",
+      "assertion_info": [],
+      "input_params": {},
+      "output_params": {},
+      "execution_time": 0,
+      "timestamp": "2026-01-28 22:03:50"
+    },
+    {
+      "test_id": "test_refresh_token_flow",
+      "title": "test_refresh_token_flow",
+      "description": "\n    测试场景 5: 刷新令牌流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token\n    ",
+      "business_info": "刷新令牌流程",
+      "file_name": "test_auth.py",
+      "class_method": "tests.testcases.test_auth#test_refresh_token_flow",
+      "status": "failed",
+      "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token",
+      "assertion_info": [],
+      "input_params": {},
+      "output_params": {},
+      "execution_time": 0,
+      "timestamp": "2026-01-28 22:03:50"
+    },
+    {
+      "test_id": "test_update_user_profile_flow",
+      "title": "test_update_user_profile_flow",
+      "description": "\n    测试场景 6: 更新用户个人资料流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me\n    ",
+      "business_info": "更新用户个人资料流程",
+      "file_name": "test_auth.py",
+      "class_method": "tests.testcases.test_auth#test_update_user_profile_flow",
+      "status": "failed",
+      "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me",
+      "assertion_info": [],
+      "input_params": {},
+      "output_params": {},
+      "execution_time": 0,
+      "timestamp": "2026-01-28 22:03:50"
+    }
+  ],
+  "call_chains": [
+    {
+      "chain_id": "chain_1",
+      "chain_name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me",
+      "description": "成功的用户注册流程",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/send-verify-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/register"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/token"
+        },
+        {
+          "method": "GET",
+          "path": "/auth/me"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/send-verify-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 2,
+          "method": "POST",
+          "path": "/auth/register",
+          "status": "failed"
+        },
+        {
+          "sequence": 3,
+          "method": "POST",
+          "path": "/auth/token",
+          "status": "failed"
+        },
+        {
+          "sequence": 4,
+          "method": "GET",
+          "path": "/auth/me",
+          "status": "failed"
+        }
+      ],
+      "execution_time": 0,
+      "status": "failed",
+      "test_id": "test_successful_user_registration_flow",
+      "tests": [
+        {
+          "test_id": "test_successful_user_registration_flow",
+          "title": "test_successful_user_registration_flow",
+          "description": "\n    测试场景 1: 成功的用户注册流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me\n    ",
+          "business_info": "成功的用户注册流程",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_successful_user_registration_flow",
+          "status": "failed",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "endpoint_count": 4,
+      "scenario_count": 1
+    },
+    {
+      "chain_id": "chain_2",
+      "chain_name": "POST /auth/register",
+      "description": "使用无效验证码注册",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/register"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/register",
+          "status": "failed"
+        }
+      ],
+      "execution_time": 0,
+      "status": "failed",
+      "test_id": "test_registration_with_invalid_verification_code",
+      "tests": [
+        {
+          "test_id": "test_registration_with_invalid_verification_code",
+          "title": "test_registration_with_invalid_verification_code",
+          "description": "\n    测试场景 2: 使用无效验证码注册\n    调用链: POST /auth/register\n    ",
+          "business_info": "使用无效验证码注册",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_registration_with_invalid_verification_code",
+          "status": "failed",
+          "call_chain": "POST /auth/register",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        },
+        {
+          "test_id": "test_registration_with_expired_code",
+          "title": "test_registration_with_expired_code",
+          "description": "\n    测试场景 3: 使用过期验证码注册\n    调用链: POST /auth/register\n    ",
+          "business_info": "使用过期验证码注册",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_registration_with_expired_code",
+          "status": "failed",
+          "call_chain": "POST /auth/register",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 2,
+      "passed_count": 0,
+      "failed_count": 2,
+      "endpoint_count": 1,
+      "scenario_count": 2
+    },
+    {
+      "chain_id": "chain_3",
+      "chain_name": "POST /auth/token",
+      "description": "使用无效凭证登录",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/token"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/token",
+          "status": "failed"
+        }
+      ],
+      "execution_time": 0,
+      "status": "failed",
+      "test_id": "test_login_with_invalid_credentials",
+      "tests": [
+        {
+          "test_id": "test_login_with_invalid_credentials",
+          "title": "test_login_with_invalid_credentials",
+          "description": "\n    测试场景 4: 使用无效凭证登录\n    调用链: POST /auth/token\n    ",
+          "business_info": "使用无效凭证登录",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_login_with_invalid_credentials",
+          "status": "failed",
+          "call_chain": "POST /auth/token",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "endpoint_count": 1,
+      "scenario_count": 1
+    },
+    {
+      "chain_id": "chain_4",
+      "chain_name": "POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset",
+      "description": "忘记密码流程",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/forgot-password/send-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/forgot-password/verify-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/forgot-password/reset"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/forgot-password/send-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 2,
+          "method": "POST",
+          "path": "/auth/forgot-password/verify-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 3,
+          "method": "POST",
+          "path": "/auth/forgot-password/reset",
+          "status": "failed"
+        }
+      ],
+      "execution_time": 0,
+      "status": "failed",
+      "test_id": "test_forgot_password_flow",
+      "tests": [
+        {
+          "test_id": "test_forgot_password_flow",
+          "title": "test_forgot_password_flow",
+          "description": "\n    测试场景 7: 忘记密码流程\n    调用链: POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset\n    ",
+          "business_info": "忘记密码流程",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_forgot_password_flow",
+          "status": "failed",
+          "call_chain": "POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "endpoint_count": 3,
+      "scenario_count": 1
+    },
+    {
+      "chain_id": "chain_5",
+      "chain_name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token",
+      "description": "刷新令牌流程",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/send-verify-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/register"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/token"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/refresh-token"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/send-verify-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 2,
+          "method": "POST",
+          "path": "/auth/register",
+          "status": "failed"
+        },
+        {
+          "sequence": 3,
+          "method": "POST",
+          "path": "/auth/token",
+          "status": "failed"
+        },
+        {
+          "sequence": 4,
+          "method": "POST",
+          "path": "/auth/refresh-token",
+          "status": "failed"
+        }
+      ],
+      "execution_time": 0,
+      "status": "failed",
+      "test_id": "test_refresh_token_flow",
+      "tests": [
+        {
+          "test_id": "test_refresh_token_flow",
+          "title": "test_refresh_token_flow",
+          "description": "\n    测试场景 5: 刷新令牌流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token\n    ",
+          "business_info": "刷新令牌流程",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_refresh_token_flow",
+          "status": "failed",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "endpoint_count": 4,
+      "scenario_count": 1
+    },
+    {
+      "chain_id": "chain_6",
+      "chain_name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me",
+      "description": "更新用户个人资料流程",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/send-verify-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/register"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/token"
+        },
+        {
+          "method": "PUT",
+          "path": "/auth/me"
+        },
+        {
+          "method": "GET",
+          "path": "/auth/me"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/send-verify-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 2,
+          "method": "POST",
+          "path": "/auth/register",
+          "status": "failed"
+        },
+        {
+          "sequence": 3,
+          "method": "POST",
+          "path": "/auth/token",
+          "status": "failed"
+        },
+        {
+          "sequence": 4,
+          "method": "PUT",
+          "path": "/auth/me",
+          "status": "failed"
+        },
+        {
+          "sequence": 5,
+          "method": "GET",
+          "path": "/auth/me",
+          "status": "failed"
+        }
+      ],
+      "execution_time": 0,
+      "status": "failed",
+      "test_id": "test_update_user_profile_flow",
+      "tests": [
+        {
+          "test_id": "test_update_user_profile_flow",
+          "title": "test_update_user_profile_flow",
+          "description": "\n    测试场景 6: 更新用户个人资料流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me\n    ",
+          "business_info": "更新用户个人资料流程",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_update_user_profile_flow",
+          "status": "failed",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "endpoint_count": 5,
+      "scenario_count": 1
+    }
+  ],
+  "coverage_stats": {
+    "endpoint_coverage": 100.0,
+    "endpoints_covered": 6,
+    "endpoints_total": 6,
+    "scenario_coverage": 100.0,
+    "scenarios_covered": 6,
+    "total_analyzed_scenarios": 6,
+    "call_chain_coverage": 100.0,
+    "call_chains_covered": 6,
+    "call_chains_total": 6,
+    "scenarios_passed": 0,
+    "scenarios_failed": 6,
+    "scenarios_skipped": 0,
+    "scenario_pass_rate": 0.0,
+    "scenarios_total": 6
+  },
+  "scenarios": {
+    "chain_1": {
+      "id": "chain_1",
+      "name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me",
+      "chain_name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me",
+      "description": "成功的用户注册流程",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/send-verify-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/register"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/token"
+        },
+        {
+          "method": "GET",
+          "path": "/auth/me"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/send-verify-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 2,
+          "method": "POST",
+          "path": "/auth/register",
+          "status": "failed"
+        },
+        {
+          "sequence": 3,
+          "method": "POST",
+          "path": "/auth/token",
+          "status": "failed"
+        },
+        {
+          "sequence": 4,
+          "method": "GET",
+          "path": "/auth/me",
+          "status": "failed"
+        }
+      ],
+      "total_execution_time": 0,
+      "status": "failed",
+      "chain_id": "chain_1",
+      "tests": [
+        {
+          "test_id": "test_successful_user_registration_flow",
+          "title": "test_successful_user_registration_flow",
+          "description": "\n    测试场景 1: 成功的用户注册流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me\n    ",
+          "business_info": "成功的用户注册流程",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_successful_user_registration_flow",
+          "status": "failed",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "scenarios": [
+        {
+          "id": "scenario_1",
+          "name": "test_successful_user_registration_flow",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me",
+          "status": "failed",
+          "execution_time": 0,
+          "file_name": "test_auth.py",
+          "endpoints": [
+            {
+              "method": "POST",
+              "path": "/auth/send-verify-code"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/register"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/token"
+            },
+            {
+              "method": "GET",
+              "path": "/auth/me"
+            }
+          ],
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "POST",
+              "path": "/auth/send-verify-code",
+              "status": "failed"
+            },
+            {
+              "sequence": 2,
+              "method": "POST",
+              "path": "/auth/register",
+              "status": "failed"
+            },
+            {
+              "sequence": 3,
+              "method": "POST",
+              "path": "/auth/token",
+              "status": "failed"
+            },
+            {
+              "sequence": 4,
+              "method": "GET",
+              "path": "/auth/me",
+              "status": "failed"
+            }
+          ],
+          "test": {
+            "test_id": "test_successful_user_registration_flow",
+            "title": "test_successful_user_registration_flow",
+            "description": "\n    测试场景 1: 成功的用户注册流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me\n    ",
+            "business_info": "成功的用户注册流程",
+            "file_name": "test_auth.py",
+            "class_method": "tests.testcases.test_auth#test_successful_user_registration_flow",
+            "status": "failed",
+            "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → GET /auth/me",
+            "assertion_info": [],
+            "input_params": {},
+            "output_params": {},
+            "execution_time": 0,
+            "timestamp": "2026-01-28 22:03:50"
+          }
+        }
+      ],
+      "scenario_count": 1,
+      "endpoint_count": 4
+    },
+    "chain_2": {
+      "id": "chain_2",
+      "name": "POST /auth/register",
+      "chain_name": "POST /auth/register",
+      "description": "使用无效验证码注册",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/register"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/register",
+          "status": "failed"
+        }
+      ],
+      "total_execution_time": 0,
+      "status": "failed",
+      "chain_id": "chain_2",
+      "tests": [
+        {
+          "test_id": "test_registration_with_invalid_verification_code",
+          "title": "test_registration_with_invalid_verification_code",
+          "description": "\n    测试场景 2: 使用无效验证码注册\n    调用链: POST /auth/register\n    ",
+          "business_info": "使用无效验证码注册",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_registration_with_invalid_verification_code",
+          "status": "failed",
+          "call_chain": "POST /auth/register",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        },
+        {
+          "test_id": "test_registration_with_expired_code",
+          "title": "test_registration_with_expired_code",
+          "description": "\n    测试场景 3: 使用过期验证码注册\n    调用链: POST /auth/register\n    ",
+          "business_info": "使用过期验证码注册",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_registration_with_expired_code",
+          "status": "failed",
+          "call_chain": "POST /auth/register",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 2,
+      "passed_count": 0,
+      "failed_count": 2,
+      "scenarios": [
+        {
+          "id": "scenario_1",
+          "name": "test_registration_with_invalid_verification_code",
+          "call_chain": "POST /auth/register",
+          "status": "failed",
+          "execution_time": 0,
+          "file_name": "test_auth.py",
+          "endpoints": [
+            {
+              "method": "POST",
+              "path": "/auth/register"
+            }
+          ],
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "POST",
+              "path": "/auth/register",
+              "status": "failed"
+            }
+          ],
+          "test": {
+            "test_id": "test_registration_with_invalid_verification_code",
+            "title": "test_registration_with_invalid_verification_code",
+            "description": "\n    测试场景 2: 使用无效验证码注册\n    调用链: POST /auth/register\n    ",
+            "business_info": "使用无效验证码注册",
+            "file_name": "test_auth.py",
+            "class_method": "tests.testcases.test_auth#test_registration_with_invalid_verification_code",
+            "status": "failed",
+            "call_chain": "POST /auth/register",
+            "assertion_info": [],
+            "input_params": {},
+            "output_params": {},
+            "execution_time": 0,
+            "timestamp": "2026-01-28 22:03:50"
+          }
+        },
+        {
+          "id": "scenario_2",
+          "name": "test_registration_with_expired_code",
+          "call_chain": "POST /auth/register",
+          "status": "failed",
+          "execution_time": 0,
+          "file_name": "test_auth.py",
+          "endpoints": [
+            {
+              "method": "POST",
+              "path": "/auth/register"
+            }
+          ],
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "POST",
+              "path": "/auth/register",
+              "status": "failed"
+            }
+          ],
+          "test": {
+            "test_id": "test_registration_with_expired_code",
+            "title": "test_registration_with_expired_code",
+            "description": "\n    测试场景 3: 使用过期验证码注册\n    调用链: POST /auth/register\n    ",
+            "business_info": "使用过期验证码注册",
+            "file_name": "test_auth.py",
+            "class_method": "tests.testcases.test_auth#test_registration_with_expired_code",
+            "status": "failed",
+            "call_chain": "POST /auth/register",
+            "assertion_info": [],
+            "input_params": {},
+            "output_params": {},
+            "execution_time": 0,
+            "timestamp": "2026-01-28 22:03:50"
+          }
+        }
+      ],
+      "scenario_count": 2,
+      "endpoint_count": 1
+    },
+    "chain_3": {
+      "id": "chain_3",
+      "name": "POST /auth/token",
+      "chain_name": "POST /auth/token",
+      "description": "使用无效凭证登录",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/token"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/token",
+          "status": "failed"
+        }
+      ],
+      "total_execution_time": 0,
+      "status": "failed",
+      "chain_id": "chain_3",
+      "tests": [
+        {
+          "test_id": "test_login_with_invalid_credentials",
+          "title": "test_login_with_invalid_credentials",
+          "description": "\n    测试场景 4: 使用无效凭证登录\n    调用链: POST /auth/token\n    ",
+          "business_info": "使用无效凭证登录",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_login_with_invalid_credentials",
+          "status": "failed",
+          "call_chain": "POST /auth/token",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "scenarios": [
+        {
+          "id": "scenario_1",
+          "name": "test_login_with_invalid_credentials",
+          "call_chain": "POST /auth/token",
+          "status": "failed",
+          "execution_time": 0,
+          "file_name": "test_auth.py",
+          "endpoints": [
+            {
+              "method": "POST",
+              "path": "/auth/token"
+            }
+          ],
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "POST",
+              "path": "/auth/token",
+              "status": "failed"
+            }
+          ],
+          "test": {
+            "test_id": "test_login_with_invalid_credentials",
+            "title": "test_login_with_invalid_credentials",
+            "description": "\n    测试场景 4: 使用无效凭证登录\n    调用链: POST /auth/token\n    ",
+            "business_info": "使用无效凭证登录",
+            "file_name": "test_auth.py",
+            "class_method": "tests.testcases.test_auth#test_login_with_invalid_credentials",
+            "status": "failed",
+            "call_chain": "POST /auth/token",
+            "assertion_info": [],
+            "input_params": {},
+            "output_params": {},
+            "execution_time": 0,
+            "timestamp": "2026-01-28 22:03:50"
+          }
+        }
+      ],
+      "scenario_count": 1,
+      "endpoint_count": 1
+    },
+    "chain_4": {
+      "id": "chain_4",
+      "name": "POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset",
+      "chain_name": "POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset",
+      "description": "忘记密码流程",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/forgot-password/send-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/forgot-password/verify-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/forgot-password/reset"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/forgot-password/send-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 2,
+          "method": "POST",
+          "path": "/auth/forgot-password/verify-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 3,
+          "method": "POST",
+          "path": "/auth/forgot-password/reset",
+          "status": "failed"
+        }
+      ],
+      "total_execution_time": 0,
+      "status": "failed",
+      "chain_id": "chain_4",
+      "tests": [
+        {
+          "test_id": "test_forgot_password_flow",
+          "title": "test_forgot_password_flow",
+          "description": "\n    测试场景 7: 忘记密码流程\n    调用链: POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset\n    ",
+          "business_info": "忘记密码流程",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_forgot_password_flow",
+          "status": "failed",
+          "call_chain": "POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "scenarios": [
+        {
+          "id": "scenario_1",
+          "name": "test_forgot_password_flow",
+          "call_chain": "POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset",
+          "status": "failed",
+          "execution_time": 0,
+          "file_name": "test_auth.py",
+          "endpoints": [
+            {
+              "method": "POST",
+              "path": "/auth/forgot-password/send-code"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/forgot-password/verify-code"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/forgot-password/reset"
+            }
+          ],
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "POST",
+              "path": "/auth/forgot-password/send-code",
+              "status": "failed"
+            },
+            {
+              "sequence": 2,
+              "method": "POST",
+              "path": "/auth/forgot-password/verify-code",
+              "status": "failed"
+            },
+            {
+              "sequence": 3,
+              "method": "POST",
+              "path": "/auth/forgot-password/reset",
+              "status": "failed"
+            }
+          ],
+          "test": {
+            "test_id": "test_forgot_password_flow",
+            "title": "test_forgot_password_flow",
+            "description": "\n    测试场景 7: 忘记密码流程\n    调用链: POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset\n    ",
+            "business_info": "忘记密码流程",
+            "file_name": "test_auth.py",
+            "class_method": "tests.testcases.test_auth#test_forgot_password_flow",
+            "status": "failed",
+            "call_chain": "POST /auth/forgot-password/send-code → POST /auth/forgot-password/verify-code → POST /auth/forgot-password/reset",
+            "assertion_info": [],
+            "input_params": {},
+            "output_params": {},
+            "execution_time": 0,
+            "timestamp": "2026-01-28 22:03:50"
+          }
+        }
+      ],
+      "scenario_count": 1,
+      "endpoint_count": 3
+    },
+    "chain_5": {
+      "id": "chain_5",
+      "name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token",
+      "chain_name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token",
+      "description": "刷新令牌流程",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/send-verify-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/register"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/token"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/refresh-token"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/send-verify-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 2,
+          "method": "POST",
+          "path": "/auth/register",
+          "status": "failed"
+        },
+        {
+          "sequence": 3,
+          "method": "POST",
+          "path": "/auth/token",
+          "status": "failed"
+        },
+        {
+          "sequence": 4,
+          "method": "POST",
+          "path": "/auth/refresh-token",
+          "status": "failed"
+        }
+      ],
+      "total_execution_time": 0,
+      "status": "failed",
+      "chain_id": "chain_5",
+      "tests": [
+        {
+          "test_id": "test_refresh_token_flow",
+          "title": "test_refresh_token_flow",
+          "description": "\n    测试场景 5: 刷新令牌流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token\n    ",
+          "business_info": "刷新令牌流程",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_refresh_token_flow",
+          "status": "failed",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "scenarios": [
+        {
+          "id": "scenario_1",
+          "name": "test_refresh_token_flow",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token",
+          "status": "failed",
+          "execution_time": 0,
+          "file_name": "test_auth.py",
+          "endpoints": [
+            {
+              "method": "POST",
+              "path": "/auth/send-verify-code"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/register"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/token"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/refresh-token"
+            }
+          ],
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "POST",
+              "path": "/auth/send-verify-code",
+              "status": "failed"
+            },
+            {
+              "sequence": 2,
+              "method": "POST",
+              "path": "/auth/register",
+              "status": "failed"
+            },
+            {
+              "sequence": 3,
+              "method": "POST",
+              "path": "/auth/token",
+              "status": "failed"
+            },
+            {
+              "sequence": 4,
+              "method": "POST",
+              "path": "/auth/refresh-token",
+              "status": "failed"
+            }
+          ],
+          "test": {
+            "test_id": "test_refresh_token_flow",
+            "title": "test_refresh_token_flow",
+            "description": "\n    测试场景 5: 刷新令牌流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token\n    ",
+            "business_info": "刷新令牌流程",
+            "file_name": "test_auth.py",
+            "class_method": "tests.testcases.test_auth#test_refresh_token_flow",
+            "status": "failed",
+            "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → POST /auth/refresh-token",
+            "assertion_info": [],
+            "input_params": {},
+            "output_params": {},
+            "execution_time": 0,
+            "timestamp": "2026-01-28 22:03:50"
+          }
+        }
+      ],
+      "scenario_count": 1,
+      "endpoint_count": 4
+    },
+    "chain_6": {
+      "id": "chain_6",
+      "name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me",
+      "chain_name": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me",
+      "description": "更新用户个人资料流程",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/send-verify-code"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/register"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/token"
+        },
+        {
+          "method": "PUT",
+          "path": "/auth/me"
+        },
+        {
+          "method": "GET",
+          "path": "/auth/me"
+        }
+      ],
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "POST",
+          "path": "/auth/send-verify-code",
+          "status": "failed"
+        },
+        {
+          "sequence": 2,
+          "method": "POST",
+          "path": "/auth/register",
+          "status": "failed"
+        },
+        {
+          "sequence": 3,
+          "method": "POST",
+          "path": "/auth/token",
+          "status": "failed"
+        },
+        {
+          "sequence": 4,
+          "method": "PUT",
+          "path": "/auth/me",
+          "status": "failed"
+        },
+        {
+          "sequence": 5,
+          "method": "GET",
+          "path": "/auth/me",
+          "status": "failed"
+        }
+      ],
+      "total_execution_time": 0,
+      "status": "failed",
+      "chain_id": "chain_6",
+      "tests": [
+        {
+          "test_id": "test_update_user_profile_flow",
+          "title": "test_update_user_profile_flow",
+          "description": "\n    测试场景 6: 更新用户个人资料流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me\n    ",
+          "business_info": "更新用户个人资料流程",
+          "file_name": "test_auth.py",
+          "class_method": "tests.testcases.test_auth#test_update_user_profile_flow",
+          "status": "failed",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me",
+          "assertion_info": [],
+          "input_params": {},
+          "output_params": {},
+          "execution_time": 0,
+          "timestamp": "2026-01-28 22:03:50"
+        }
+      ],
+      "test_count": 1,
+      "passed_count": 0,
+      "failed_count": 1,
+      "scenarios": [
+        {
+          "id": "scenario_1",
+          "name": "test_update_user_profile_flow",
+          "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me",
+          "status": "failed",
+          "execution_time": 0,
+          "file_name": "test_auth.py",
+          "endpoints": [
+            {
+              "method": "POST",
+              "path": "/auth/send-verify-code"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/register"
+            },
+            {
+              "method": "POST",
+              "path": "/auth/token"
+            },
+            {
+              "method": "PUT",
+              "path": "/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/auth/me"
+            }
+          ],
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "POST",
+              "path": "/auth/send-verify-code",
+              "status": "failed"
+            },
+            {
+              "sequence": 2,
+              "method": "POST",
+              "path": "/auth/register",
+              "status": "failed"
+            },
+            {
+              "sequence": 3,
+              "method": "POST",
+              "path": "/auth/token",
+              "status": "failed"
+            },
+            {
+              "sequence": 4,
+              "method": "PUT",
+              "path": "/auth/me",
+              "status": "failed"
+            },
+            {
+              "sequence": 5,
+              "method": "GET",
+              "path": "/auth/me",
+              "status": "failed"
+            }
+          ],
+          "test": {
+            "test_id": "test_update_user_profile_flow",
+            "title": "test_update_user_profile_flow",
+            "description": "\n    测试场景 6: 更新用户个人资料流程\n    调用链: POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me\n    ",
+            "business_info": "更新用户个人资料流程",
+            "file_name": "test_auth.py",
+            "class_method": "tests.testcases.test_auth#test_update_user_profile_flow",
+            "status": "failed",
+            "call_chain": "POST /auth/send-verify-code → POST /auth/register → POST /auth/token → PUT /auth/me → GET /auth/me",
+            "assertion_info": [],
+            "input_params": {},
+            "output_params": {},
+            "execution_time": 0,
+            "timestamp": "2026-01-28 22:03:50"
+          }
+        }
+      ],
+      "scenario_count": 1,
+      "endpoint_count": 5
+    }
+  }
+}

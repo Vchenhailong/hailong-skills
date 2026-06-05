@@ -1,0 +1,388 @@
+{
+  "report_metadata": {
+    "author": "hailong.chen",
+    "ai_model": "GPT-4",
+    "language_stack": "Python 3.11+",
+    "test_framework": "pytest",
+    "generated_at": "2023-06-15 10:32:30",
+    "total_analyzed_scenarios": 3,
+    "total_test_cases": 3,
+    "total_http_endpoint": 3,
+    "passed_scenarios": 3,
+    "failed_scenarios": 0,
+    "skipped_scenarios": 0,
+    "scenario_pass_rate": 100.0,
+    "total_exc_tests": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "pass_rate": 100.0,
+    "total_exc_endpoint": 3,
+    "total_execution_time": 0.42,
+    "project_name": "freedom"
+  },
+  "test_results": [
+    {
+      "test_name": "获取用户列表",
+      "test_description": "测试获取用户列表的API",
+      "file_name": "test_users.py",
+      "class_method_name": "TestUserAPI.test_get_users",
+      "status": "passed",
+      "execution_time": 0.125,
+      "timestamp": "2023-06-15T10:30:00Z",
+      "call_chain": "GET /api/users",
+      "assertion_info": [
+        {
+          "type": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "result": "passed"
+        },
+        {
+          "type": "field_value",
+          "expected": "success",
+          "actual": "success",
+          "result": "passed"
+        },
+        {
+          "type": "array_length",
+          "expected": 2,
+          "actual": 2,
+          "result": "passed"
+        }
+      ],
+      "input_params": {},
+      "output_params": {
+        "users": [
+          {
+            "id": 1,
+            "name": "张三",
+            "email": "zhangsan@example.com"
+          },
+          {
+            "id": 2,
+            "name": "李四",
+            "email": "lisi@example.com"
+          }
+        ]
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "创建新用户",
+      "test_description": "测试创建新用户的API",
+      "file_name": "test_users.py",
+      "class_method_name": "TestUserAPI.test_create_user",
+      "status": "passed",
+      "execution_time": 0.2,
+      "timestamp": "2023-06-15T10:31:00Z",
+      "call_chain": "POST /api/users",
+      "assertion_info": [
+        {
+          "type": "status_code",
+          "expected": 201,
+          "actual": 201,
+          "result": "passed"
+        },
+        {
+          "type": "field_value",
+          "expected": "success",
+          "actual": "success",
+          "result": "passed"
+        },
+        {
+          "type": "field_value",
+          "expected": "王五",
+          "actual": "王五",
+          "result": "passed"
+        }
+      ],
+      "input_params": {
+        "name": "王五",
+        "email": "wangwu@example.com"
+      },
+      "output_params": {
+        "user": {
+          "id": 3,
+          "name": "王五",
+          "email": "wangwu@example.com"
+        }
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "获取不存在的用户",
+      "test_description": "测试获取不存在用户的API",
+      "file_name": "test_users.py",
+      "class_method_name": "TestUserAPI.test_get_nonexistent_user",
+      "status": "passed",
+      "execution_time": 0.095,
+      "timestamp": "2023-06-15T10:32:00Z",
+      "call_chain": "GET /api/users/999",
+      "assertion_info": [
+        {
+          "type": "status_code",
+          "expected": 404,
+          "actual": 404,
+          "result": "passed"
+        },
+        {
+          "type": "field_value",
+          "expected": "error",
+          "actual": "error",
+          "result": "passed"
+        },
+        {
+          "type": "field_value",
+          "expected": "用户不存在",
+          "actual": "用户不存在",
+          "result": "passed"
+        }
+      ],
+      "input_params": {
+        "id": 999
+      },
+      "output_params": {},
+      "error_message": null
+    }
+  ],
+  "call_chains": [
+    {
+      "chain_id": "user_management",
+      "chain_name": "用户管理流程",
+      "endpoints": [
+        "GET /api/users",
+        "POST /api/users",
+        "GET /api/users/{id}"
+      ],
+      "description": "用户列表查询、创建用户、查询特定用户的完整流程",
+      "calls": [
+        {
+          "method": "GET",
+          "endpoint": "/api/users",
+          "status_code": 200,
+          "execution_time": 0.125,
+          "request_headers": {
+            "Content-Type": "application/json"
+          },
+          "request_body": null,
+          "response_headers": {
+            "Content-Type": "application/json"
+          },
+          "response_body": {
+            "status": "success",
+            "data": {
+              "users": [
+                {
+                  "id": 1,
+                  "name": "张三",
+                  "email": "zhangsan@example.com"
+                },
+                {
+                  "id": 2,
+                  "name": "李四",
+                  "email": "lisi@example.com"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "endpoint": "/api/users",
+          "status_code": 201,
+          "execution_time": 0.2,
+          "request_headers": {
+            "Content-Type": "application/json"
+          },
+          "request_body": {
+            "name": "王五",
+            "email": "wangwu@example.com"
+          },
+          "response_headers": {
+            "Content-Type": "application/json"
+          },
+          "response_body": {
+            "status": "success",
+            "data": {
+              "user": {
+                "id": 3,
+                "name": "王五",
+                "email": "wangwu@example.com"
+              }
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "endpoint": "/api/users/999",
+          "status_code": 404,
+          "execution_time": 0.095,
+          "request_headers": {
+            "Content-Type": "application/json"
+          },
+          "request_body": null,
+          "response_headers": {
+            "Content-Type": "application/json"
+          },
+          "response_body": {
+            "status": "error",
+            "message": "用户不存在"
+          }
+        }
+      ]
+    }
+  ],
+  "coverage_stats": {
+    "endpoint_coverage": 100.0,
+    "endpoints_covered": 3,
+    "endpoints_total": 3,
+    "scenario_coverage": 100.0,
+    "scenarios_covered": 3,
+    "total_analyzed_scenarios": 3,
+    "call_chain_coverage": 100.0,
+    "call_chains_covered": 1,
+    "call_chains_total": 1,
+    "scenarios_passed": 3,
+    "scenarios_failed": 0,
+    "scenarios_skipped": 0,
+    "scenario_pass_rate": 100.0
+  },
+  "scenarios": {
+    "获取用户列表 - 成功": {
+      "chain_name": "用户管理流程 - 获取用户列表",
+      "description": "成功获取用户列表",
+      "endpoints": ["GET /api/users"],
+      "test_count": 1,
+      "passed_count": 1,
+      "failed_count": 0,
+      "tests": [
+        {
+          "test_name": "获取用户列表",
+          "test_description": "测试获取用户列表的API",
+          "file_name": "test_users.py",
+          "class_method_name": "TestUserAPI.test_get_users",
+          "status": "passed",
+          "execution_time": 0.125,
+          "timestamp": "2023-06-15T10:30:00Z",
+          "call_chain": "GET /api/users",
+          "assertion_info": [
+            {
+              "type": "status_code",
+              "expected": 200,
+              "actual": 200,
+              "result": "passed"
+            },
+            {
+              "type": "field_value",
+              "expected": "success",
+              "actual": "success",
+              "result": "passed"
+            }
+          ],
+          "input_params": {},
+          "output_params": {
+            "users": [
+              {
+                "id": 1,
+                "name": "张三",
+                "email": "zhangsan@example.com"
+              },
+              {
+                "id": 2,
+                "name": "李四",
+                "email": "lisi@example.com"
+              }
+            ]
+          },
+          "error_message": null
+        }
+      ]
+    },
+    "创建新用户 - 成功": {
+      "chain_name": "用户管理流程 - 创建新用户",
+      "description": "成功创建新用户",
+      "endpoints": ["POST /api/users"],
+      "test_count": 1,
+      "passed_count": 1,
+      "failed_count": 0,
+      "tests": [
+        {
+          "test_name": "创建新用户",
+          "test_description": "测试创建新用户的API",
+          "file_name": "test_users.py",
+          "class_method_name": "TestUserAPI.test_create_user",
+          "status": "passed",
+          "execution_time": 0.2,
+          "timestamp": "2023-06-15T10:31:00Z",
+          "call_chain": "POST /api/users",
+          "assertion_info": [
+            {
+              "type": "status_code",
+              "expected": 201,
+              "actual": 201,
+              "result": "passed"
+            },
+            {
+              "type": "field_value",
+              "expected": "success",
+              "actual": "success",
+              "result": "passed"
+            }
+          ],
+          "input_params": {
+            "name": "王五",
+            "email": "wangwu@example.com"
+          },
+          "output_params": {
+            "user": {
+              "id": 3,
+              "name": "王五",
+              "email": "wangwu@example.com"
+            }
+          },
+          "error_message": null
+        }
+      ]
+    },
+    "获取不存在的用户 - 成功": {
+      "chain_name": "用户管理流程 - 获取不存在的用户",
+      "description": "获取不存在的用户，返回正确的错误信息",
+      "endpoints": ["GET /api/users/{id}"],
+      "test_count": 1,
+      "passed_count": 1,
+      "failed_count": 0,
+      "tests": [
+        {
+          "test_name": "获取不存在的用户",
+          "test_description": "测试获取不存在用户的API",
+          "file_name": "test_users.py",
+          "class_method_name": "TestUserAPI.test_get_nonexistent_user",
+          "status": "passed",
+          "execution_time": 0.095,
+          "timestamp": "2023-06-15T10:32:00Z",
+          "call_chain": "GET /api/users/999",
+          "assertion_info": [
+            {
+              "type": "status_code",
+              "expected": 404,
+              "actual": 404,
+              "result": "passed"
+            },
+            {
+              "type": "field_value",
+              "expected": "error",
+              "actual": "error",
+              "result": "passed"
+            }
+          ],
+          "input_params": {
+            "id": 999
+          },
+          "output_params": {},
+          "error_message": null
+        }
+      ]
+    }
+  }
+}

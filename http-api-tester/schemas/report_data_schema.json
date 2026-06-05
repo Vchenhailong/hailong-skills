@@ -1,0 +1,461 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HTTP API Test Report Data",
+  "description": "Standardized data structure for HTTP API test reports",
+  "type": "object",
+  "required": ["report_metadata", "test_results"],
+  "properties": {
+    "report_metadata": {
+      "type": "object",
+      "description": "Report metadata including author, AI model, language stack, project name, and statistics",
+      "required": ["author", "ai_model", "language_stack", "generated_at", "project_name"],
+      "properties": {
+        "author": {
+          "type": "string",
+          "description": "Report author name",
+          "default": "hailong.chen"
+        },
+        "ai_model": {
+          "type": "string",
+          "description": "AI model used for test generation",
+          "default": "GLM-4.7"
+        },
+        "language_stack": {
+          "type": "string",
+          "description": "Programming language and version",
+          "examples": ["Python 3.11+", "Java 17+", "Node.js 18+", "Go 1.20+", "Rust 1.70+"]
+        },
+        "test_framework": {
+          "type": "string",
+          "description": "Test framework used",
+          "examples": ["pytest", "TestNG", "Jest", "testing", "cargo test"]
+        },
+        "project_name": {
+          "type": "string",
+          "description": "Name of the project under test (e.g., 'backend', 'frontend', 'api-service')"
+        },
+        "generated_at": {
+          "type": "string",
+          "description": "Report generation timestamp in format YYYY-MM-DD HH:MM:SS"
+        },
+        "total_analyzed_scenarios": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of scenarios analyzed"
+        },
+        "total_test_cases": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of test cases to be executed"
+        },
+        "total_http_endpoint": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of HTTP endpoints"
+        },
+        "passed_scenarios": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of passed scenarios (all test cases in scenario passed)"
+        },
+        "failed_scenarios": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of failed scenarios (any test case in scenario failed)"
+        },
+        "skipped_scenarios": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of skipped scenarios"
+        },
+        "scenario_pass_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Scenario pass rate percentage"
+        },
+        "total_exc_tests": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of executed test cases (only includes passed and failed, excludes skipped)"
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of passed test cases"
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of failed test cases"
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of skipped test cases"
+        },
+        "pass_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Pass rate percentage"
+        },
+        "total_exc_endpoint": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tested endpoints"
+        },
+        "total_execution_time": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total execution time in seconds"
+        }
+      }
+    },
+    "test_results": {
+      "type": "array",
+      "description": "Array of test results with detailed information",
+      "items": {
+        "type": "object",
+        "required": ["test_name", "status", "execution_time"],
+        "properties": {
+          "test_name": {
+            "type": "string",
+            "description": "Test case name or title"
+          },
+          "test_description": {
+            "type": "string",
+            "description": "Test case description explaining purpose and expected behavior"
+          },
+          "file_name": {
+            "type": "string",
+            "description": "Test case file name (NOT file name of object under test)"
+          },
+          "class_method_name": {
+            "type": "string",
+            "description": "Test method identifier for traceability"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["passed", "failed", "skipped"],
+            "description": "Test execution status"
+          },
+          "execution_time": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Execution duration in seconds"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Test execution timestamp"
+          },
+          "call_chain": {
+            "type": "string",
+            "description": "API call chain for this test case"
+          },
+          "assertion_info": {
+            "type": "array",
+            "description": "Array of assertion details",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "Assertion type (e.g., status_code, field_value, contains)"
+                },
+                "expected": {
+                  "description": "Expected value"
+                },
+                "actual": {
+                  "description": "Actual value"
+                },
+                "result": {
+                  "type": "string",
+                  "enum": ["passed", "failed"],
+                  "description": "Assertion result"
+                }
+              }
+            }
+          },
+          "input_params": {
+            "type": "object",
+            "description": "Request parameters sent to API endpoint"
+          },
+          "output_params": {
+            "type": "object",
+            "description": "Response parameters received from API endpoint"
+          },
+          "error_message": {
+            "type": ["string", "null"],
+            "description": "Error message if test failed"
+          }
+        }
+      }
+    },
+    "call_chains": {
+      "type": "array",
+      "description": "Array of API call chain visualizations",
+      "items": {
+        "type": "object",
+        "properties": {
+          "chain_id": {
+            "type": "string",
+            "description": "Unique identifier for the call chain"
+          },
+          "chain_name": {
+            "type": "string",
+            "description": "Name of the call chain"
+          },
+          "endpoints": {
+            "type": "array",
+            "description": "List of endpoints in the call chain",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the call chain scenario"
+          },
+          "calls": {
+            "type": "array",
+            "description": "Array of API calls in the chain",
+            "items": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                  "description": "HTTP method"
+                },
+                "endpoint": {
+                  "type": "string",
+                  "description": "API endpoint path"
+                },
+                "status_code": {
+                  "type": "integer",
+                  "description": "HTTP status code"
+                },
+                "execution_time": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Execution duration in seconds"
+                },
+                "request_headers": {
+                  "type": "object",
+                  "description": "Request headers"
+                },
+                "request_body": {
+                  "description": "Request body"
+                },
+                "response_headers": {
+                  "type": "object",
+                  "description": "Response headers"
+                },
+                "response_body": {
+                  "description": "Response body"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coverage_stats": {
+      "type": "object",
+      "description": "Coverage statistics",
+      "properties": {
+        "endpoint_coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Endpoint coverage percentage"
+        },
+        "endpoints_covered": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tested endpoints"
+        },
+        "endpoints_total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of endpoints"
+        },
+        "scenario_coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Scenario coverage percentage"
+        },
+        "scenarios_covered": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tested scenarios"
+        },
+        "total_analyzed_scenarios": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of analyzed scenarios"
+        },
+        "call_chain_coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Call chain coverage percentage"
+        },
+        "call_chains_covered": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tested call chains"
+        },
+        "call_chains_total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of call chains"
+        },
+        "scenarios_passed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of passed scenarios"
+        },
+        "scenarios_failed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of failed scenarios"
+        },
+        "scenarios_skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of skipped scenarios"
+        },
+        "scenario_pass_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Scenario pass rate percentage"
+        }
+      }
+    },
+    "scenarios": {
+      "type": "object",
+      "description": "Scenario-based test groupings",
+      "additionalProperties": {
+        "type": "object",
+        "description": "Scenario-based test grouping",
+        "properties": {
+          "chain_name": {
+            "type": "string",
+            "description": "Name of the call chain this scenario belongs to"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the scenario"
+          },
+          "endpoints": {
+            "type": "array",
+            "description": "List of endpoints in this scenario",
+            "items": {
+              "type": "string"
+            }
+          },
+          "test_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of test cases in this scenario"
+          },
+          "passed_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of passed test cases in this scenario"
+          },
+          "failed_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of failed test cases in this scenario"
+          },
+          "tests": {
+            "type": "array",
+            "description": "Array of test results for this scenario",
+            "items": {
+              "type": "object",
+              "properties": {
+                "test_name": {
+                  "type": "string",
+                  "description": "Test case name or title"
+                },
+                "test_description": {
+                  "type": "string",
+                  "description": "Test case description explaining purpose and expected behavior"
+                },
+                "file_name": {
+                  "type": "string",
+                  "description": "Test case file name (NOT file name of object under test)"
+                },
+                "class_method_name": {
+                  "type": "string",
+                  "description": "Test method identifier for traceability"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["passed", "failed", "skipped"],
+                  "description": "Test execution status"
+                },
+                "execution_time": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Execution duration in seconds"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Test execution timestamp"
+                },
+                "call_chain": {
+                  "type": "string",
+                  "description": "API call chain for this test case"
+                },
+                "assertion_info": {
+                  "type": "array",
+                  "description": "Array of assertion details",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "Assertion type (e.g., status_code, field_value, contains)"
+                      },
+                      "expected": {
+                        "description": "Expected value"
+                      },
+                      "actual": {
+                        "description": "Actual value"
+                      },
+                      "result": {
+                        "type": "string",
+                        "enum": ["passed", "failed"],
+                        "description": "Assertion result"
+                      }
+                    }
+                  }
+                },
+                "input_params": {
+                  "type": "object",
+                  "description": "Request parameters sent to API endpoint"
+                },
+                "output_params": {
+                  "type": "object",
+                  "description": "Response parameters received from API endpoint"
+                },
+                "error_message": {
+                  "type": ["string", "null"],
+                  "description": "Error message if test failed"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

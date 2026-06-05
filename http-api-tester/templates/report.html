@@ -1,0 +1,2229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP API 测试报告</title>
+    
+    <script src="assets/js/d3.v7.min.js"></script>
+    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .report-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            overflow: hidden;
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .report-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .report-header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+        
+        .report-meta {
+            margin-top: 15px;
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+        
+        .meta-item {
+            display: inline-block;
+            margin: 0 15px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+            min-height: 200px;
+            overflow: visible;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: visible;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--stat-color, #667eea);
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--stat-color, #667eea);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.2;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 500;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.4;
+        }
+        
+        .stat-passed { --stat-color: #28a745; }
+        .stat-failed { --stat-color: #dc3545; }
+        .stat-skipped { --stat-color: #ffc107; }
+        .stat-rate { --stat-color: #17a2b8; }
+        .stat-time { --stat-color: #667eea; }
+        
+        .nav-tabs {
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            padding: 0 30px;
+        }
+        
+        .nav-link {
+            border: none;
+            color: #495057;
+            font-weight: 500;
+            padding: 15px 25px;
+            margin-right: 5px;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: transparent;
+        }
+        
+        .nav-link:hover {
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .nav-link.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            font-weight: 600;
+        }
+        
+        .tab-content {
+            padding: 30px;
+            min-height: 600px;
+        }
+        
+        .test-table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .table thead th {
+            background: #667eea;
+            color: white;
+            border: none;
+            font-weight: 500;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+            padding: 15px;
+        }
+        
+        .table tbody td {
+            padding: 12px 15px;
+            vertical-align: middle;
+            border-color: #e9ecef;
+        }
+        
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-passed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-skipped {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .call-chain-diagram {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            max-height: 600px;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        .call-chains-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .call-chain-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            overflow: visible;
+        }
+        
+        .call-chain-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .call-chain-header:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        
+        .call-chain-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .call-chain-meta {
+            display: flex;
+            align-items: center;
+        }
+        
+        .call-chain-details {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .call-chain-description {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .call-chain-description p {
+            margin: 0;
+            color: #495057;
+            line-height: 1.6;
+        }
+        
+        .call-chain-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .call-step {
+            background: #fafafa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .call-step:hover {
+            background: #f0f0f0;
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+        
+        .call-step-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .call-step-details {
+            display: flex;
+            gap: 20px;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .detail-row strong {
+            color: #495057;
+            min-width: 60px;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-success {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .status-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        
+        .status-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .call-step-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .call-step-header:hover {
+            background: #e9ecef;
+        }
+        
+        .execution-time {
+            margin-left: auto;
+            color: #6c757d;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .call-step-section {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .call-step-section h6 {
+            margin: 0 0 10px 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .call-step-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .info-row {
+            display: flex;
+            gap: 10px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .info-row strong {
+            color: #495057;
+            min-width: 80px;
+            font-weight: 500;
+        }
+        
+        .code-block {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .call-step-popup {
+            position: absolute;
+            top: 0;
+            right: 10px;
+            width: 450px;
+            max-height: 80vh;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 1000;
+            overflow-y: auto;
+            animation: popupFadeIn 0.3s ease;
+        }
+        
+        @keyframes popupFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px 12px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .popup-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .popup-close:hover {
+            background: rgba(255,255,255,0.4);
+            transform: rotate(90deg);
+        }
+        
+        .popup-content {
+            padding: 20px;
+        }
+        
+        .popup-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .popup-section:last-child {
+            border-bottom: none;
+        }
+        
+        .popup-section h6 {
+            margin: 0 0 10px 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .popup-info {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .popup-row {
+            display: flex;
+            gap: 10px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .popup-row strong {
+            color: #495057;
+            min-width: 100px;
+            font-weight: 500;
+        }
+        
+        .assertion-details {
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+        
+        .assertion-passed {
+            color: #28a745;
+        }
+        
+        .assertion-failed {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .search-box {
+            margin-bottom: 20px;
+        }
+        
+        .search-box input {
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            padding: 12px 20px;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+        
+        .search-box input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            outline: none;
+        }
+        
+        .filter-buttons {
+            margin-bottom: 20px;
+        }
+        
+        .filter-btn {
+            margin: 0 5px;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+        
+        .filter-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .filter-btn.active {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .expandable-row {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .expandable-row:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.01);
+        }
+        
+        .detail-panel {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 0 10px 10px 0;
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .coverage-chart {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .chart-title {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+        
+        .loading i {
+            font-size: 2rem;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        .tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+            max-width: 300px;
+            line-height: 1.4;
+        }
+        
+        .api-endpoint {
+            font-family: 'Courier New', monospace;
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            color: #d63384;
+        }
+        
+        .http-method {
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            text-transform: uppercase;
+        }
+        
+        .method-get { background: #d4edda; color: #155724; }
+        .method-post { background: #cce5ff; color: #004085; }
+        .method-put { background: #fff3cd; color: #856404; }
+        .method-delete { background: #f8d7da; color: #721c24; }
+        
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .no-data i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        .coverage-stats {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .coverage-item {
+            text-align: center;
+        }
+        
+        .coverage-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+        
+        .coverage-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        .test-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .summary-item {
+            text-align: center;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+        }
+        
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: block;
+        }
+        
+        .summary-label {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading-spinner {
+            text-align: center;
+        }
+        
+        .loading-spinner i {
+            font-size: 3rem;
+            color: #667eea;
+        }
+        
+        .loading-spinner p {
+            margin-top: 20px;
+            font-size: 1.2rem;
+            color: #666;
+        }
+        
+        .error-message {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .error-message i {
+            font-size: 4rem;
+            color: #dc3545;
+            margin-bottom: 20px;
+        }
+        
+        .error-detail {
+            font-size: 1.2rem;
+            color: #dc3545;
+            margin: 10px 0;
+        }
+        
+        .error-hint {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>正在加载报告数据...</p>
+        </div>
+    </div>
+
+    <div class="container-fluid" id="report-container" style="display: none;">
+        <div class="report-container fade-in">
+            <div class="report-header">
+                <h1><i class="fas fa-chart-line"></i> HTTP API 测试报告</h1>
+                <div class="report-meta" id="report-meta">
+                </div>
+            </div>
+            
+            <div class="stats-grid" id="stats-container">
+            </div>
+            
+            <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-target="#overview">
+                        <i class="fas fa-tachometer-alt"></i> 测试概览
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-target="#callchains">
+                        <i class="fas fa-project-diagram"></i> 调用链可视化
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-target="#details">
+                        <i class="fas fa-table"></i> 详细结果
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-target="#coverage">
+                        <i class="fas fa-chart-pie"></i> 覆盖率分析
+                    </button>
+                </li>
+            </ul>
+            
+            <div class="tab-content" id="mainTabContent">
+                <div class="tab-pane fade show active" id="overview">
+                </div>
+                
+                <div class="tab-pane fade" id="callchains">
+                    <div class="call-chain-diagram">
+                        <h5><i class="fas fa-project-diagram"></i> API调用链关系图</h5>
+                        <div id="callchain-visualization" style="height: 600px;">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-pane fade" id="details">
+                    <div class="test-table">
+                        <div class="search-box">
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                        <input type="text" class="form-control" id="searchInput" placeholder="搜索测试用例名称、描述或状态...">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="filter-buttons text-end">
+                                        <button class="btn btn-outline-primary btn-sm filter-btn active" data-filter="all">
+                                            <i class="fas fa-list"></i> 全部
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm filter-btn" data-filter="passed">
+                                            <i class="fas fa-check"></i> 通过
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm filter-btn" data-filter="failed">
+                                            <i class="fas fa-times"></i> 失败
+                                        </button>
+                                        <button class="btn btn-outline-warning btn-sm filter-btn" data-filter="skipped">
+                                            <i class="fas fa-forward"></i> 跳过
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="test-results-table">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-pane fade" id="coverage">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="coverage-chart">
+                                <h5 class="chart-title"><i class="fas fa-chart-bar"></i> 覆盖率统计</h5>
+                                <div id="endpoint-coverage-chart" style="height: 300px;">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="coverage-chart">
+                                <h5 class="chart-title"><i class="fas fa-chart-pie"></i> 测试状态分布</h5>
+                                <div id="status-distribution-chart" style="height: 300px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="coverage-chart">
+                        <h5 class="chart-title"><i class="fas fa-chart-line"></i> 执行时间趋势</h5>
+                        <div id="execution-time-chart" style="height: 300px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+    
+    <script src="assets/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        const CONFIG = {
+            jsonFileName: 'report.json',
+            autoLoad: true,
+            debug: false
+        };
+        
+        let reportData = null;
+        
+        function formatJSON(obj) {
+            try {
+                return JSON.stringify(obj, null, 2);
+            } catch (e) {
+                return String(obj);
+            }
+        }
+        
+        function cleanText(text) {
+            if (!text) return '';
+            return String(text).trim().replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+        
+        async function loadReportData() {
+            console.log('[DEBUG] loadReportData 开始执行');
+            console.log('[DEBUG] CONFIG.useEmbeddedData:', CONFIG.useEmbeddedData);
+            console.log('[DEBUG] typeof REPORT_DATA:', typeof REPORT_DATA);
+            
+            if (CONFIG.useEmbeddedData && typeof REPORT_DATA !== 'undefined') {
+                console.log('[DEBUG] 使用嵌入的REPORT_DATA');
+                console.log('[DEBUG] REPORT_DATA内容:', REPORT_DATA);
+                reportData = REPORT_DATA;
+                if (validateReportData(reportData)) {
+                    console.log('[DEBUG] 数据验证通过，开始渲染报告');
+                    renderReport();
+                } else {
+                    console.error('[DEBUG] 嵌入的报告数据格式不正确');
+                    showError('嵌入的报告数据格式不正确');
+                }
+                return;
+            }
+
+            console.log('[DEBUG] 尝试从文件加载数据:', CONFIG.jsonFileName);
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const jsonFile = urlParams.get('data') || CONFIG.jsonFileName;
+                
+                console.log('[DEBUG] 请求的文件路径:', jsonFile);
+                const response = await fetch(jsonFile);
+                console.log('[DEBUG] 响应状态:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                reportData = await response.json();
+                console.log('[DEBUG] 从文件加载的数据:', reportData);
+                
+                if (!validateReportData(reportData)) {
+                    throw new Error('报告数据格式不正确');
+                }
+                
+                renderReport();
+                
+            } catch (error) {
+                console.error('[DEBUG] 加载数据失败:', error);
+                showError(error.message);
+            }
+        }
+        
+        function validateReportData(data) {
+            console.log('[DEBUG] validateReportData 开始验证');
+            console.log('[DEBUG] 数据类型:', typeof data);
+            console.log('[DEBUG] 数据内容:', data);
+            
+            if (!data || typeof data !== 'object') {
+                console.error('[DEBUG] 数据不是对象');
+                return false;
+            }
+            
+            const requiredFields = ['report_metadata', 'test_results'];
+            for (const field of requiredFields) {
+                if (!data[field]) {
+                    console.error(`[DEBUG] 缺少必需字段: ${field}`);
+                    return false;
+                }
+            }
+            
+            console.log('[DEBUG] 数据验证通过');
+            return true;
+        }
+        
+        function renderReport() {
+            console.log('[DEBUG] renderReport 开始执行');
+            console.log('[DEBUG] reportData:', reportData);
+            
+            document.getElementById('loading-overlay').style.display = 'none';
+            document.getElementById('report-container').style.display = 'block';
+            
+            console.log('[DEBUG] 开始渲染各个组件');
+            
+            try {
+                renderReportMeta();
+                console.log('[DEBUG] renderReportMeta 完成');
+            } catch (error) {
+                console.error('[DEBUG] renderReportMeta 出错:', error);
+            }
+            
+            try {
+                renderStatsCards();
+                console.log('[DEBUG] renderStatsCards 完成');
+            } catch (error) {
+                console.error('[DEBUG] renderStatsCards 出错:', error);
+            }
+            
+            try {
+                renderOverview();
+                console.log('[DEBUG] renderOverview 完成');
+            } catch (error) {
+                console.error('[DEBUG] renderOverview 出错:', error);
+            }
+            
+            try {
+                renderCallChainVisualization();
+                console.log('[DEBUG] renderCallChainVisualization 完成');
+            } catch (error) {
+                console.error('[DEBUG] renderCallChainVisualization 出错:', error);
+            }
+            
+            try {
+                renderTestResultsTable();
+                console.log('[DEBUG] renderTestResultsTable 完成');
+            } catch (error) {
+                console.error('[DEBUG] renderTestResultsTable 出错:', error);
+            }
+            
+            try {
+                renderCoverageCharts();
+                console.log('[DEBUG] renderCoverageCharts 完成');
+            } catch (error) {
+                console.error('[DEBUG] renderCoverageCharts 出错:', error);
+            }
+            
+            try {
+                initializeInteractions();
+                console.log('[DEBUG] initializeInteractions 完成');
+            } catch (error) {
+                console.error('[DEBUG] initializeInteractions 出错:', error);
+            }
+            
+            console.log('[DEBUG] renderReport 执行完成');
+        }
+        
+        function renderReportMeta() {
+            const container = document.getElementById('report-meta');
+            const metadata = reportData.report_metadata || {};
+            
+            container.innerHTML = `
+                <span class="meta-item">
+                    <i class="fas fa-calendar"></i> 
+                    生成时间: ${metadata.generated_at || 'N/A'}
+                </span>
+                <span class="meta-item">
+                    <i class="fas fa-user"></i> 
+                    作者: ${metadata.author || 'N/A'}
+                </span>
+                <span class="meta-item">
+                    <i class="fas fa-robot"></i> 
+                    AI模型: ${metadata.ai_model || 'N/A'}
+                </span>
+                <span class="meta-item">
+                    <i class="fas fa-code"></i> 
+                    语言栈: ${metadata.language_stack || 'N/A'}
+                </span>
+                <span class="meta-item">
+                    <i class="fas fa-cog"></i> 
+                    测试框架: ${metadata.test_framework || 'N/A'}
+                </span>
+                <span class="meta-item">
+                    <i class="fas fa-project"></i> 
+                    被测项目: ${metadata.project_name || 'N/A'}
+                </span>
+            `;
+        }
+        
+        function renderStatsCards() {
+            console.log('[DEBUG] renderStatsCards 开始执行');
+            const container = document.getElementById('stats-container');
+            console.log('[DEBUG] container元素:', container);
+            
+            const metadata = reportData.report_metadata || {};
+            const testResults = reportData.test_results || [];
+            
+            console.log('[DEBUG] metadata:', metadata);
+            console.log('[DEBUG] testResults:', testResults);
+            console.log('[DEBUG] testResults.length:', testResults.length);
+            
+            const total = testResults.length;
+            const passed = testResults.filter(t => t.status === 'passed').length;
+            const failed = testResults.filter(t => t.status === 'failed').length;
+            const skipped = testResults.filter(t => t.status === 'skipped').length;
+            const passRate = total > 0 ? ((passed / total) * 100) : 0;
+            const totalTime = metadata.total_execution_time || testResults.reduce((sum, t) => sum + (t.execution_time || 0), 0);
+            
+            console.log('[DEBUG] total:', total, 'passed:', passed, 'failed:', failed, 'skipped:', skipped);
+            
+            container.innerHTML = `
+                <div class="stat-card stat-time">
+                    <div class="stat-value">${total}</div>
+                    <div class="stat-label">总测试数 <i class="fas fa-info-circle" onmouseenter="showTooltip(event, '= 实际执行的场景数')" onmouseleave="hideTooltip()"></i></div>
+                </div>
+                <div class="stat-card stat-passed">
+                    <div class="stat-value">${passed}</div>
+                    <div class="stat-label">通过</div>
+                </div>
+                <div class="stat-card stat-failed">
+                    <div class="stat-value">${failed}</div>
+                    <div class="stat-label">失败</div>
+                </div>
+                <div class="stat-card stat-skipped">
+                    <div class="stat-value">${skipped}</div>
+                    <div class="stat-label">跳过</div>
+                </div>
+                <div class="stat-card stat-rate">
+                    <div class="stat-value">${passRate.toFixed(1)}%</div>
+                    <div class="stat-label">通过率 <i class="fas fa-info-circle" onmouseenter="showTooltip(event, '= 通过数 / 测试用例数')" onmouseleave="hideTooltip()"></i></div>
+                </div>
+                <div class="stat-card stat-time">
+                    <div class="stat-value">${totalTime.toFixed(2)}s</div>
+                    <div class="stat-label">执行时间</div>
+                </div>
+                <div class="stat-card stat-endpoints">
+                    <div class="stat-value">${totalEndpointsTested}</div>
+                    <div class="stat-label">测试接口数 <i class="fas fa-info-circle" onmouseenter="showTooltip(event, '= 实际测试的API端点数量')" onmouseleave="hideTooltip()"></i></div>
+                </div>
+            `;
+            
+            console.log('[DEBUG] renderStatsCards 执行完成');
+        }
+        
+        function renderOverview() {
+            console.log('[DEBUG] renderOverview 开始执行');
+            const container = document.getElementById('overview');
+            console.log('[DEBUG] container元素:', container);
+            
+            const scenarios = Object.keys(reportData.scenarios || {});
+            const coverage = reportData.coverage_stats || {};
+            
+            console.log('[DEBUG] scenarios:', scenarios);
+            console.log('[DEBUG] scenarios.length:', scenarios.length);
+            console.log('[DEBUG] coverage:', coverage);
+            
+            if (scenarios.length === 0) {
+                console.log('[DEBUG] scenarios为空，显示暂无数据');
+                container.innerHTML = '<div class="no-data"><i class="fas fa-chart-line"></i><p>暂无测试概览数据</p></div>';
+                return;
+            }
+            
+            let overviewHTML = `
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5><i class="fas fa-chart-line"></i> 测试场景概览</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>场景描述</th>
+                                        <th>测试数量</th>
+                                        <th>通过率</th>
+                                        <th>平均执行时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            scenarios.forEach(scenario => {
+                const tests = reportData.scenarios[scenario];
+                const passed = tests.filter(t => t.status === 'passed').length;
+                const total = tests.length;
+                const passRate = total > 0 ? (passed / total * 100) : 0;
+                const avgTime = tests.reduce((sum, t) => sum + (t.execution_time || 0), 0) / total;
+                const cleanScenario = scenario.trim().replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+                
+                overviewHTML += `
+                    <tr>
+                        <td><strong>${cleanScenario || '未命名场景'}</strong></td>
+                        <td><span class="badge bg-primary rounded-pill">${total}</span></td>
+                        <td>
+                            <span class="badge bg-${passRate >= 80 ? 'success' : passRate >= 60 ? 'warning' : 'danger'} rounded-pill">
+                                ${passRate.toFixed(1)}%
+                            </span>
+                        </td>
+                        <td><span class="api-endpoint">${avgTime.toFixed(3)}s</span></td>
+                    </tr>
+                `;
+            });
+            
+            overviewHTML += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h5><i class="fas fa-chart-pie"></i> 覆盖率统计</h5>
+                        <div class="coverage-stats">
+            `;
+            
+            Object.entries(coverage)
+                .filter(([key]) => key.endsWith('_coverage'))
+                .forEach(([key, value]) => {
+                    const displayName = {
+                        'endpoint_coverage': '端点覆盖率',
+                        'scenario_coverage': '场景覆盖率',
+                        'call_chain_coverage': '调用链覆盖率'
+                    }[key] || key;
+                    
+                    const percentage = parseFloat(value) || 0;
+                    let formula = '';
+                    
+                    if (key === 'endpoint_coverage') {
+                        formula = '= 已测试端点数 / 总端点数';
+                    } else if (key === 'scenario_coverage') {
+                        formula = '= 已测试场景数 / 总场景数';
+                    } else if (key === 'call_chain_coverage') {
+                        formula = '= 已测试调用链数 / 总调用链数';
+                    }
+                    
+                    overviewHTML += `
+                        <div class="coverage-item">
+                            <span class="coverage-value">${percentage.toFixed(1)}%</span>
+                            <span class="coverage-label">${displayName} <i class="fas fa-info-circle" onmouseenter="showTooltip(event, '${formula}')" onmouseleave="hideTooltip()"></i></span>
+                        </div>
+                    `;
+                });
+            
+            overviewHTML += `
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = overviewHTML;
+        }
+        
+        function renderCallChainVisualization() {
+            console.log('[DEBUG] renderCallChainVisualization 开始执行');
+            
+            const container = document.getElementById('callchain-visualization');
+            console.log('[DEBUG] container元素:', container);
+            
+            const callChains = reportData.call_chains || [];
+            console.log('[DEBUG] callChains:', callChains);
+            console.log('[DEBUG] callChains.length:', callChains.length);
+            
+            if (!callChains || callChains.length === 0) {
+                console.log('[DEBUG] callChains为空，显示暂无数据');
+                container.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-project-diagram"></i>
+                        <p>暂无调用链数据</p>
+                        <small class="text-muted">调用链数据将在有API调用序列时显示</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="call-chains-list">';
+            
+            callChains.forEach((chain, chainIndex) => {
+                if (!chain || !chain.calls) return;
+                
+                const chainName = chain.chain_name || `调用链 ${chainIndex + 1}`;
+                const chainDescription = chain.description || '';
+                
+                html += `
+                    <div class="call-chain-item" data-chain-id="${chainIndex}">
+                        <div class="call-chain-header" onclick="toggleChainDetails(${chainIndex})">
+                            <div class="call-chain-title">
+                                <i class="fas fa-chevron-right" id="chevron-${chainIndex}"></i>
+                                <strong>${chainName}</strong>
+                            </div>
+                            <div class="call-chain-meta">
+                                <span class="badge bg-primary">${chain.calls.length} 步</span>
+                            </div>
+                        </div>
+                        <div class="call-chain-details" id="chain-details-${chainIndex}" style="display: none;">
+                            <div class="call-chain-description">
+                                <p><strong>描述:</strong> ${chainDescription}</p>
+                            </div>
+                            <div class="call-chain-steps">
+                `;
+                
+                chain.calls.forEach((call, callIndex) => {
+                    const method = call.method || 'GET';
+                    const endpoint = call.endpoint || 'unknown';
+                    const statusCode = call.status_code || 200;
+                    const methodColor = {
+                        'GET': '#28a745',
+                        'POST': '#007bff',
+                        'PUT': '#ffc107',
+                        'DELETE': '#dc3545',
+                        'PATCH': '#6f42c1'
+                    }[method] || '#6c757d';
+                    
+                    const executionTime = call.execution_time || 0;
+                    
+                    html += `
+                        <div class="call-step" onclick="showCallStepPopup(${chainIndex}, ${callIndex}, event)">
+                            <div class="call-step-header">
+                                <span class="http-method method-${method.toLowerCase()}" style="background-color: ${methodColor};">${method}</span>
+                                <span class="api-endpoint">${endpoint}</span>
+                                <span class="status-badge status-${statusCode >= 200 && statusCode < 300 ? 'success' : statusCode >= 400 && statusCode < 500 ? 'warning' : 'danger'}">${statusCode}</span>
+                                <span class="execution-time">${executionTime.toFixed(2)}s</span>
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+            
+            console.log('[DEBUG] renderCallChainVisualization 执行完成');
+        }
+        
+        function toggleChainDetails(chainIndex) {
+            const details = document.getElementById(`chain-details-${chainIndex}`);
+            const chevron = document.getElementById(`chevron-${chainIndex}`);
+            
+            if (details.style.display === 'none') {
+                details.style.display = 'block';
+                chevron.classList.remove('fa-chevron-right');
+                chevron.classList.add('fa-chevron-down');
+            } else {
+                details.style.display = 'none';
+                chevron.classList.remove('fa-chevron-down');
+                chevron.classList.add('fa-chevron-right');
+            }
+        }
+        
+        function showCallStepPopup(chainIndex, callIndex, event) {
+            event.stopPropagation();
+            
+            const chain = reportData.call_chains[chainIndex];
+            const call = chain.calls[callIndex];
+            
+            const method = call.method || 'GET';
+            const endpoint = call.endpoint || 'unknown';
+            const statusCode = call.status_code || 200;
+            const methodColor = {
+                'GET': '#28a745',
+                'POST': '#007bff',
+                'PUT': '#ffc107',
+                'DELETE': '#dc3545',
+                'PATCH': '#6f42c1'
+            }[method] || '#6c757d';
+            
+            const requestHeaders = call.request_headers ? JSON.stringify(call.request_headers, null, 2) : '{}';
+            const requestBody = call.request_body ? JSON.stringify(call.request_body, null, 2) : '无';
+            const responseHeaders = call.response_headers ? JSON.stringify(call.response_headers, null, 2) : '{}';
+            const responseBody = call.response_body ? JSON.stringify(call.response_body, null, 2) : '无';
+            const executionTime = call.execution_time || 0;
+            
+            const popupContent = `
+                <div class="popup-header">
+                    <h6><i class="fas fa-exchange-alt"></i> API调用详情</h6>
+                    <button class="popup-close" onclick="closePopup()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="popup-content">
+                    <div class="popup-section">
+                        <h6><i class="fas fa-arrow-up"></i> 请求信息</h6>
+                        <div class="popup-info">
+                            <div class="popup-row">
+                                <strong>HTTP方法:</strong>
+                                <span class="http-method method-${method.toLowerCase()}" style="background-color: ${methodColor};">${method}</span>
+                            </div>
+                            <div class="popup-row">
+                                <strong>端点:</strong>
+                                <span class="api-endpoint">${endpoint}</span>
+                            </div>
+                            <div class="popup-row">
+                                <strong>请求头:</strong>
+                                <pre class="code-block">${requestHeaders}</pre>
+                            </div>
+                            <div class="popup-row">
+                                <strong>请求体:</strong>
+                                <pre class="code-block">${requestBody}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="popup-section">
+                        <h6><i class="fas fa-arrow-down"></i> 响应信息</h6>
+                        <div class="popup-info">
+                            <div class="popup-row">
+                                <strong>状态码:</strong>
+                                <span class="status-badge status-${statusCode >= 200 && statusCode < 300 ? 'success' : statusCode >= 400 && statusCode < 500 ? 'warning' : 'danger'}">${statusCode}</span>
+                            </div>
+                            <div class="popup-row">
+                                <strong>响应头:</strong>
+                                <pre class="code-block">${responseHeaders}</pre>
+                            </div>
+                            <div class="popup-row">
+                                <strong>响应体:</strong>
+                                <pre class="code-block">${responseBody}</pre>
+                            </div>
+                            <div class="popup-row">
+                                <strong>执行时间:</strong>
+                                <span>${executionTime.toFixed(2)}秒</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const existingPopup = document.getElementById('call-step-popup');
+            if (existingPopup) {
+                existingPopup.remove();
+            }
+            
+            const popup = document.createElement('div');
+            popup.id = 'call-step-popup';
+            popup.className = 'call-step-popup';
+            popup.innerHTML = popupContent;
+            
+            const container = document.getElementById('callchain-visualization');
+            container.appendChild(popup);
+            
+            popup.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+        }
+        
+        function closePopup() {
+            const popup = document.getElementById('call-step-popup');
+            if (popup) {
+                popup.remove();
+            }
+        }
+        
+        document.addEventListener('click', function(e) {
+            const popup = document.getElementById('call-step-popup');
+            if (popup && !popup.contains(e.target)) {
+                popup.remove();
+            }
+        });
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const popup = document.getElementById('call-step-popup');
+                if (popup) {
+                    popup.remove();
+                }
+            }
+        });
+        
+        function renderTestResultsTable() {
+            console.log('[DEBUG] renderTestResultsTable 开始执行');
+            const container = document.getElementById('test-results-table');
+            console.log('[DEBUG] container元素:', container);
+            
+            const testResults = reportData.test_results || [];
+            console.log('[DEBUG] testResults:', testResults);
+            console.log('[DEBUG] testResults.length:', testResults.length);
+            
+            if (!testResults || testResults.length === 0) {
+                console.log('[DEBUG] testResults为空，显示暂无数据');
+                container.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-table"></i>
+                        <p>暂无测试数据</p>
+                        <small class="text-muted">测试执行后将显示详细结果</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            let tableHTML = `
+                <div class="table-responsive">
+                    <table class="table table-hover" id="testTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th width="40"><i class="fas fa-expand"></i></th>
+                                <th>测试名称</th>
+                                <th>文件名</th>
+                                <th>类方法名</th>
+                                <th>状态</th>
+                                <th>调用链</th>
+                                <th>执行时间</th>
+                                <th>断言信息</th>
+                            </tr>
+                        </thead>
+                        <tbody id="testTableBody">
+            `;
+            
+            testResults.forEach((test, index) => {
+                const statusClass = {
+                    'passed': 'status-passed',
+                    'failed': 'status-failed',
+                    'skipped': 'status-skipped'
+                }[test.status] || 'status-skipped';
+                
+                const assertions = test.assertion_info || [];
+                const assertionSummary = assertions.map(a => {
+                    const resultClass = a.result === 'passed' ? 'assertion-passed' : 'assertion-failed';
+                    return `<div class="assertion-details ${resultClass}">• ${a.type}: ${a.expected} → ${a.actual}</div>`;
+                }).join('');
+                
+                const callChain = test.call_chain || [];
+                const cleanCallChain = Array.isArray(callChain) && callChain.length > 0 ?
+                    `<span class="api-endpoint">${callChain.slice(0, 3).join(' → ')}${callChain.length > 3 ? ' ...' : ''}</span>` :
+                    '<span class="text-muted">-</span>';
+                
+                const fileName = test.file_name || 'unknown';
+                const classMethod = test.class_method_name || 'unknown';
+                const executionTime = test.execution_time || 0;
+                
+                tableHTML += `
+                    <tr class="expandable-row" data-test-id="${index}" data-status="${test.status}" data-test-name="${test.test_name}">
+                        <td><i class="fas fa-chevron-right"></i></td>
+                        <td><strong>${test.test_name || '未命名测试'}</strong></td>
+                        <td><code class="small">${fileName}</code></td>
+                        <td><code class="small">${classMethod}</code></td>
+                        <td><span class="status-badge ${statusClass}">${test.status}</span></td>
+                        <td>${cleanCallChain}</td>
+                        <td><span class="api-endpoint">${executionTime.toFixed(3)}s</span></td>
+                        <td>
+                            <div class="assertion-details">
+                                ${assertionSummary || '<span class="text-muted">无断言信息</span>'}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr class="detail-row" id="detail-${index}" style="display: none;">
+                        <td colspan="8">
+                            <div class="detail-panel">
+                                <h6><i class="fas fa-info-circle"></i> 测试详情</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6><i class="fas fa-sign-in-alt"></i> 输入参数</h6>
+                                        <pre class="bg-light p-3 rounded"><code>${formatJSON(test.input_params || {})}</code></pre>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6><i class="fas fa-sign-out-alt"></i> 输出参数</h6>
+                                        <pre class="bg-light p-3 rounded"><code>${formatJSON(test.output_params || {})}</code></pre>
+                                    </div>
+                                </div>
+                                ${test.error_message ? `
+                                <div class="mt-3">
+                                    <h6><i class="fas fa-exclamation-triangle"></i> 错误信息</h6>
+                                    <div class="alert alert-danger">
+                                        <code>${test.error_message}</code>
+                                    </div>
+                                </div>
+                                ` : ''}
+                                <div class="mt-3">
+                                    <h6><i class="fas fa-clock"></i> 时间信息</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <small><strong>执行时间:</strong> ${executionTime.toFixed(3)}秒</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <small><strong>时间戳:</strong> ${test.timestamp || 'N/A'}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = tableHTML;
+            
+            document.querySelectorAll('.expandable-row').forEach(row => {
+                row.addEventListener('click', function() {
+                    const testId = this.dataset.testId;
+                    const detailRow = document.getElementById(`detail-${testId}`);
+                    const icon = this.querySelector('i');
+                    
+                    if (detailRow.style.display === 'none') {
+                        detailRow.style.display = 'table-row';
+                        icon.classList.remove('fa-chevron-right');
+                        icon.classList.add('fa-chevron-down');
+                    } else {
+                        detailRow.style.display = 'none';
+                        icon.classList.remove('fa-chevron-down');
+                        icon.classList.add('fa-chevron-right');
+                    }
+                });
+            });
+        }
+        
+        function wrapText(text, width) {
+            text.each(function() {
+                const text = d3.select(this);
+                const content = text.text();
+                const words = content.split('');
+                let line = [];
+                let lineNumber = 0;
+                const lineHeight = 1.2;
+                const y = text.attr('y');
+                const dy = parseFloat(text.attr('dy'));
+                let tspan = text.text(null).append('tspan').attr('x', 0).attr('y', y).attr('dy', dy + 'em');
+                
+                for (let i = 0; i < words.length; i++) {
+                    line.push(words[i]);
+                    tspan.text(line.join(''));
+                    if (tspan.node().getComputedTextLength() > width && line.length > 1) {
+                        line.pop();
+                        tspan.text(line.join(''));
+                        line = [words[i]];
+                        tspan = text.append('tspan').attr('x', 0).attr('y', y).attr('dy', ++lineNumber * lineHeight + dy + 'em').text(words[i]);
+                    }
+                }
+            });
+        }
+        
+        function renderCoverageCharts() {
+            console.log('[DEBUG] renderCoverageCharts 开始执行');
+            try {
+                renderEndpointCoverageChart();
+                renderStatusDistributionChart();
+                renderExecutionTimeChart();
+                console.log('[DEBUG] renderCoverageCharts 执行完成');
+            } catch (error) {
+                console.error('[DEBUG] renderCoverageCharts 执行出错:', error);
+            }
+        }
+        
+        function renderEndpointCoverageChart() {
+            const container = document.getElementById('endpoint-coverage-chart');
+            const coverage = reportData.coverage_stats || {};
+            
+            if (!coverage || Object.keys(coverage).length === 0) {
+                container.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-chart-bar"></i>
+                        <p>暂无覆盖率数据</p>
+                        <small class="text-muted">覆盖率数据将在测试执行后显示</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            const data = Object.entries(coverage)
+                .filter(([key]) => key.endsWith('_coverage'))
+                .map(([key, value]) => {
+                    const displayName = {
+                        'endpoint_coverage': '端点覆盖率',
+                        'scenario_coverage': '场景覆盖率',
+                        'call_chain_coverage': '调用链覆盖率'
+                    }[key] || key;
+                    
+                    let percentage;
+                    if (typeof value === 'string') {
+                        const match = value.match(/([\d.]+)/);
+                        percentage = match ? parseFloat(match[1]) : 0;
+                    } else if (typeof value === 'number') {
+                        percentage = value;
+                    } else {
+                        percentage = 0;
+                    }
+                    
+                    return {
+                        name: displayName,
+                        value: percentage,
+                        raw: value
+                    };
+                });
+            
+            if (data.length === 0) {
+                container.innerHTML = '<div class="no-data"><i class="fas fa-chart-bar"></i><p>暂无有效的覆盖率数据</p></div>';
+                return;
+            }
+            
+            const width = container.clientWidth;
+            const height = 300;
+            const margin = {top: 40, right: 40, bottom: 80, left: 60};
+            const chartWidth = width - margin.left - margin.right;
+            const chartHeight = height - margin.top - margin.bottom;
+            
+            container.innerHTML = '';
+            
+            const svg = d3.select('#endpoint-coverage-chart')
+                .html('')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+            
+            const x = d3.scaleBand()
+                .range([0, chartWidth])
+                .padding(0.2)
+                .domain(data.map(d => d.name));
+            
+            const y = d3.scaleLinear()
+                .range([chartHeight, 0])
+                .domain([0, 100]);
+            
+            g.append('g')
+                .attr('transform', `translate(0,${chartHeight})`)
+                .call(d3.axisBottom(x))
+                .selectAll('text')
+                .style('font-size', '11px')
+                .style('fill', '#495057')
+                .attr('dy', '0.35em')
+                .call(wrapText, x.bandwidth());
+            
+            g.append('g')
+                .call(d3.axisLeft(y).tickFormat(d => d + '%'))
+                .selectAll('text')
+                .style('font-size', '12px')
+                .style('fill', '#495057');
+            
+            const bars = g.selectAll('.bar')
+                .data(data)
+                .enter().append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => x(d.name))
+                .attr('width', x.bandwidth())
+                .attr('y', chartHeight)
+                .attr('height', 0)
+                .style('fill', '#667eea')
+                .style('cursor', 'pointer')
+                .style('rx', 4)
+                .style('ry', 4)
+                .on('mouseover', function(event, d) {
+                    d3.select(this)
+                        .style('fill', '#5a6fd8')
+                        .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))');
+                    
+                    showTooltip(event, `
+                        <div style="min-width: 150px;">
+                            <h6><strong>${d.name}</strong></h6>
+                            <hr style="margin: 8px 0;">
+                            <p><strong>覆盖率:</strong> ${d.value.toFixed(1)}%</p>
+                            <p><strong>原始数据:</strong> ${d.raw}</p>
+                        </div>
+                    `);
+                })
+                .on('mouseout', function(event, d) {
+                    d3.select(this)
+                        .style('fill', '#667eea')
+                        .style('filter', 'none');
+                    
+                    hideTooltip();
+                });
+            
+            bars.transition()
+                .duration(1000)
+                .delay((d, i) => i * 100)
+                .attr('y', d => y(d.value))
+                .attr('height', d => chartHeight - y(d.value));
+            
+            g.selectAll('.label')
+                .data(data)
+                .enter().append('text')
+                .attr('class', 'label')
+                .attr('x', d => x(d.name) + x.bandwidth() / 2)
+                .attr('y', d => y(d.value) - 8)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '12px')
+                .style('font-weight', 'bold')
+                .style('fill', '#495057')
+                .text(d => d.value.toFixed(1) + '%')
+                .style('opacity', 0)
+                .transition()
+                .duration(1000)
+                .delay((d, i) => i * 100 + 500)
+                .style('opacity', 1);
+        }
+        
+        function renderStatusDistributionChart() {
+            const container = document.getElementById('status-distribution-chart');
+            const testResults = reportData.test_results || [];
+            
+            if (!testResults || testResults.length === 0) {
+                container.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-chart-pie"></i>
+                        <p>暂无状态分布数据</p>
+                        <small class="text-muted">测试执行后将显示状态分布</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            const statusCounts = {
+                passed: testResults.filter(t => t.status === 'passed').length,
+                failed: testResults.filter(t => t.status === 'failed').length,
+                skipped: testResults.filter(t => t.status === 'skipped').length
+            };
+            
+            const total = statusCounts.passed + statusCounts.failed + statusCounts.skipped;
+            
+            if (total === 0) {
+                container.innerHTML = '<div class="no-data"><i class="fas fa-chart-pie"></i><p>暂无有效的状态数据</p></div>';
+                return;
+            }
+            
+            const data = Object.entries(statusCounts).map(([status, count]) => {
+                const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+                return {
+                    status: status,
+                    count: count,
+                    percentage: parseFloat(percentage),
+                    label: {
+                        passed: '通过',
+                        failed: '失败',
+                        skipped: '跳过'
+                    }[status] || status,
+                    color: {
+                        passed: '#28a745',
+                        failed: '#dc3545',
+                        skipped: '#ffc107'
+                    }[status]
+                };
+            }).filter(d => d.count > 0);
+            
+            const width = container.clientWidth;
+            const height = 300;
+            const radius = Math.min(width, height) / 2 - 60;
+            
+            container.innerHTML = '';
+            
+            const svg = d3.select('#status-distribution-chart')
+                .html('')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            const g = svg.append('g')
+                .attr('transform', `translate(${width/2},${height/2})`);
+            
+            const pie = d3.pie()
+                .value(d => d.count)
+                .sort(null);
+            
+            const arc = d3.arc()
+                .innerRadius(0)
+                .outerRadius(radius);
+            
+            const arcs = g.selectAll('.arc')
+                .data(pie(data))
+                .enter().append('g')
+                .attr('class', 'arc');
+            
+            arcs.append('path')
+                .attr('d', arc)
+                .style('fill', d => d.data.color)
+                .style('cursor', 'pointer')
+                .style('stroke', '#fff')
+                .style('stroke-width', 2)
+                .on('mouseover', function(event, d) {
+                    d3.select(this)
+                        .transition()
+                        .duration(200)
+                        .attr('d', d3.arc().innerRadius(0).outerRadius(radius + 10));
+                    
+                    showTooltip(event, `
+                        <div style="min-width: 120px;">
+                            <h6><strong>${d.data.label}</strong></h6>
+                            <p><strong>数量:</strong> ${d.data.count}</p>
+                            <p><strong>占比:</strong> ${d.data.percentage}%</p>
+                        </div>
+                    `);
+                })
+                .on('mouseout', function(event, d) {
+                    d3.select(this)
+                        .transition()
+                        .duration(200)
+                        .attr('d', arc);
+                    
+                    hideTooltip();
+                });
+            
+            arcs.append('text')
+                .attr('transform', d => `translate(${arc.centroid(d)})`)
+                .attr('text-anchor', 'middle')
+                .style('fill', 'white')
+                .style('font-size', '12px')
+                .style('font-weight', 'bold')
+                .style('text-shadow', '1px 1px 2px rgba(0,0,0,0.5)')
+                .text(d => d.data.count > 0 ? d.data.count : '')
+                .style('opacity', 0)
+                .transition()
+                .duration(1000)
+                .delay(500)
+                .style('opacity', 1);
+        }
+        
+        function renderExecutionTimeChart() {
+            const container = document.getElementById('execution-time-chart');
+            const testResults = reportData.test_results || [];
+            
+            if (!testResults || testResults.length === 0) {
+                container.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-chart-line"></i>
+                        <p>暂无执行时间数据</p>
+                        <small class="text-muted">测试执行后将显示时间趋势</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            const data = testResults
+                .filter((test, index, self) => {
+                    const firstIndex = testResults.findIndex(t => t.test_name === test.test_name);
+                    return firstIndex === index;
+                })
+                .map((test, index) => {
+                    const time = test.execution_time || 0;
+                    const status = test.status || 'unknown';
+                    const name = test.test_name || `测试${index + 1}`;
+                    
+                    return {
+                        name: name.length > 20 ? name.substring(0, 20) + '...' : name,
+                        time: time,
+                        status: status,
+                        fullName: test.test_name || name
+                    };
+                })
+                .filter(d => d.time > 0)
+                .sort((a, b) => a.time - b.time);
+            
+            if (data.length === 0) {
+                container.innerHTML = '<div class="no-data"><i class="fas fa-chart-line"></i><p>暂无有效的执行时间数据</p></div>';
+                return;
+            }
+            
+            const width = container.clientWidth;
+            const height = 300;
+            const margin = {top: 40, right: 40, bottom: 80, left: 60};
+            const chartWidth = width - margin.left - margin.right;
+            const chartHeight = height - margin.top - margin.bottom;
+            
+            container.innerHTML = '';
+            
+            const svg = d3.select('#execution-time-chart')
+                .html('')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+            
+            const x = d3.scaleBand()
+                .range([0, chartWidth])
+                .padding(0.1)
+                .domain(data.map(d => d.name));
+            
+            const y = d3.scaleLinear()
+                .range([chartHeight, 0])
+                .domain([0, d3.max(data, d => d.time) * 1.1]);
+            
+            g.append('g')
+                .attr('transform', `translate(0,${chartHeight})`)
+                .call(d3.axisBottom(x))
+                .selectAll('text')
+                .style('font-size', '10px')
+                .style('fill', '#495057')
+                .style('text-anchor', 'end')
+                .attr('dx', '-.8em')
+                .attr('dy', '.15em')
+                .attr('transform', 'rotate(-45)');
+            
+            g.append('g')
+                .call(d3.axisLeft(y).tickFormat(d => d.toFixed(3) + 's'))
+                .selectAll('text')
+                .style('font-size', '12px')
+                .style('fill', '#495057');
+            
+            const bars = g.selectAll('.bar')
+                .data(data)
+                .enter().append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => x(d.name))
+                .attr('width', x.bandwidth())
+                .attr('y', chartHeight)
+                .attr('height', 0)
+                .style('fill', d => {
+                    const colors = {'passed': '#28a745', 'failed': '#dc3545', 'skipped': '#ffc107'};
+                    return colors[d.status] || '#6c757d';
+                })
+                .style('cursor', 'pointer')
+                .style('rx', 2)
+                .style('ry', 2)
+                .on('mouseover', function(event, d) {
+                    d3.select(this)
+                        .style('opacity', 0.8)
+                        .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))');
+                    
+                    showTooltip(event, `
+                        <div style="min-width: 200px;">
+                            <h6><strong>${d.fullName}</strong></h6>
+                            <hr style="margin: 8px 0;">
+                            <p><strong>执行时间:</strong> ${d.time.toFixed(3)}秒</p>
+                            <p><strong>状态:</strong> <span class="badge bg-${d.status === 'passed' ? 'success' : d.status === 'failed' ? 'danger' : 'warning'}">${d.status}</span></p>
+                        </div>
+                    `);
+                })
+                .on('mouseout', function(event, d) {
+                    d3.select(this)
+                        .style('opacity', 1)
+                        .style('filter', 'none');
+                    
+                    hideTooltip();
+                });
+            
+            bars.transition()
+                .duration(1000)
+                .delay((d, i) => i * 50)
+                .attr('y', d => y(d.time))
+                .attr('height', d => chartHeight - y(d.time));
+            
+            g.selectAll('.label')
+                .data(data.filter(d => d.time > 0.1))
+                .enter().append('text')
+                .attr('class', 'label')
+                .attr('x', d => x(d.name) + x.bandwidth() / 2)
+                .attr('y', d => y(d.time) - 5)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '10px')
+                .style('font-weight', 'bold')
+                .style('fill', '#495057')
+                .text(d => d.time.toFixed(3))
+                .style('opacity', 0)
+                .transition()
+                .duration(1000)
+                .delay((d, i) => i * 50 + 500)
+                .style('opacity', 1);
+        }
+        
+        function initializeInteractions() {
+            console.log('[DEBUG] initializeInteractions 开始执行');
+            
+            const searchInput = document.getElementById('searchInput');
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            
+            console.log('[DEBUG] searchInput:', searchInput);
+            console.log('[DEBUG] filterButtons:', filterButtons);
+            
+            if (!searchInput || filterButtons.length === 0) return;
+            
+            searchInput.addEventListener('input', function() {
+                filterTable(this.value, getCurrentFilter());
+            });
+            
+            filterButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    filterButtons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    filterTable(searchInput.value, this.dataset.filter);
+                });
+            });
+            
+            const tabButtons = document.querySelectorAll('[data-bs-target]');
+            console.log('[DEBUG] tabButtons:', tabButtons);
+            console.log('[DEBUG] tabButtons.length:', tabButtons.length);
+            
+            tabButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    console.log('[DEBUG] Tab按钮被点击:', this.dataset.bsTarget);
+                    const target = this.dataset.bsTarget;
+                    switchTab(target);
+                });
+            });
+            
+            console.log('[DEBUG] initializeInteractions 执行完成');
+        }
+        
+        function switchTab(targetId) {
+            console.log('[DEBUG] switchTab 被调用，targetId:', targetId);
+            
+            // 去掉targetId前面的#号
+            const cleanTargetId = targetId.startsWith('#') ? targetId.substring(1) : targetId;
+            console.log('[DEBUG] 清理后的targetId:', cleanTargetId);
+            
+            const allPanes = document.querySelectorAll('.tab-pane');
+            console.log('[DEBUG] 找到的tab-pane数量:', allPanes.length);
+            
+            allPanes.forEach(pane => {
+                console.log('[DEBUG] 移除tab-pane的show和active类:', pane.id);
+                pane.classList.remove('show', 'active');
+            });
+            
+            const allLinks = document.querySelectorAll('.nav-link');
+            console.log('[DEBUG] 找到的nav-link数量:', allLinks.length);
+            
+            allLinks.forEach(link => {
+                console.log('[DEBUG] 移除nav-link的active类:', link.dataset.bsTarget);
+                link.classList.remove('active');
+            });
+            
+            const targetPane = document.getElementById(cleanTargetId);
+            console.log('[DEBUG] 目标tab-pane:', targetPane);
+            
+            if (targetPane) {
+                console.log('[DEBUG] 添加show和active类到目标tab-pane');
+                targetPane.classList.add('show', 'active');
+            }
+            
+            const activeBtn = document.querySelector(`[data-bs-target="${targetId}"]`);
+            console.log('[DEBUG] 目标nav-link按钮:', activeBtn);
+            
+            if (activeBtn) {
+                console.log('[DEBUG] 添加active类到目标nav-link按钮');
+                activeBtn.classList.add('active');
+            }
+            
+            if (cleanTargetId === 'coverage') {
+                console.log('[DEBUG] 延迟重新渲染覆盖率图表');
+                setTimeout(() => {
+                    renderCoverageCharts();
+                }, 100);
+            }
+            
+            console.log('[DEBUG] switchTab 执行完成');
+        }
+        
+        function filterTable(searchTerm, statusFilter) {
+            const rows = document.querySelectorAll('#testTableBody tr.expandable-row');
+            const searchLower = searchTerm.toLowerCase().trim();
+            
+            let visibleCount = 0;
+            
+            rows.forEach(row => {
+                const testName = (row.dataset.testName || '').toLowerCase();
+                const testStatus = row.dataset.status;
+                
+                const matchesSearch = !searchLower || testName.includes(searchLower);
+                const matchesFilter = statusFilter === 'all' || testStatus === statusFilter;
+                
+                const isVisible = matchesSearch && matchesFilter;
+                row.style.display = isVisible ? 'table-row' : 'none';
+                
+                if (isVisible) visibleCount++;
+            });
+            
+            updateSearchResults(visibleCount, rows.length, searchTerm, statusFilter);
+        }
+        
+        function updateSearchResults(visible, total, searchTerm, statusFilter) {
+            const container = document.getElementById('test-results-table');
+            let existingInfo = container.querySelector('.search-info');
+            if (existingInfo) {
+                existingInfo.remove();
+            }
+            
+            if (searchTerm || statusFilter !== 'all') {
+                const info = document.createElement('div');
+                info.className = 'search-info alert alert-info mt-3';
+                info.innerHTML = `
+                    <i class="fas fa-info-circle"></i>
+                    显示 ${visible} / ${total} 个测试结果
+                    ${searchTerm ? `(搜索: "${searchTerm}")` : ''}
+                    ${statusFilter !== 'all' ? `(过滤: ${statusFilter})` : ''}
+                `;
+                container.appendChild(info);
+            }
+        }
+        
+        function getCurrentFilter() {
+            const activeButton = document.querySelector('.filter-btn.active');
+            return activeButton ? activeButton.dataset.filter : 'all';
+        }
+        
+        function showTooltip(event, content) {
+            const tooltip = document.getElementById('tooltip');
+            if (!tooltip) return;
+            
+            tooltip.innerHTML = content;
+            tooltip.style.left = (event.pageX + 10) + 'px';
+            tooltip.style.top = (event.pageY - 10) + 'px';
+            tooltip.style.opacity = 1;
+        }
+        
+        function hideTooltip() {
+            const tooltip = document.getElementById('tooltip');
+            if (!tooltip) return;
+            
+            tooltip.style.opacity = 0;
+        }
+        
+        function showError(message) {
+            document.getElementById('loading-overlay').innerHTML = `
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>加载报告失败</p>
+                    <p class="error-detail">${message}</p>
+                    <p class="error-hint">请确保 JSON 文件存在且格式正确</p>
+                </div>
+            `;
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            if (CONFIG.autoLoad) {
+                loadReportData();
+            }
+        });
+    </script>
+</body>
+</html>
