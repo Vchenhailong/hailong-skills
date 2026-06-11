@@ -419,7 +419,91 @@ config = {
     "step_duration": 6.0,
 }
 
-## 9. 排版预估最佳实践（AI 静态计算用）
+## 9. 字幕区视觉装饰层规范（强制）
+
+### 9.1 视觉结构
+
+字幕区由三层组件按坐标层级关系装配而成：
+
+```
+┌─────────────────────────────── ┐  ← Layer 1: 底衬 (bg)
+│▎ 文字内容...                   │  ← Layer 2: 强调条 (accent_bar) + Layer 3: 文字 (text_group)
+└─────────────────────────────── ┘
+     ↑ 整体水平居中于屏幕底部 Y = -3.85
+```
+
+### 9.2 组件样式参数
+
+| 组件 | 参数 | 值 | 说明 |
+|------|------|-----|------|
+| **底衬** | 颜色 | `#0e1828` | 深色半透明背景 |
+| | 透明度 | `0.72` | 不完全遮挡底层内容 |
+| | 宽度 | **自适应文字宽度** | `min(文字宽 + 0.8, 屏幕宽×95%)` |
+| | 高度 | **自适应文字高度** | `文字高 + 0.4` |
+| | 圆角 | `0.14` | 微圆角 |
+| **强调条** | 颜色 | `#ffd166` | 金色强调 |
+| | 宽度 | `0.09` | 固定窄条 |
+| | 高度 | **与底衬等高** | ★ 关键约束：height = bg.height |
+| | 位置 | 紧贴底衬左边缘内侧 | `next_to(bg.get_left(), RIGHT, buff=0)` |
+| **文字** | 颜色 | `#CCCCCC` | 浅灰色 |
+| | 字号 | `18` | 默认值 |
+| | 位置 | 紧贴强调条右侧 | `next_to(accent.get_right(), RIGHT, buff=0.25)` |
+
+### 9.3 坐标层级装配顺序（强制）
+
+**必须严格按以下顺序执行，禁止使用 VGroup 自动排列：**
+
+```
+Step 1: 创建 bg (底衬)
+        → 尺寸: width=自适应, height=自适应
+
+Step 2: 创建 accent_bar (强调条)
+        → height = bg.height  ← ★ 与底衬等高
+        → accent_bar.next_to(bg.get_left(), RIGHT, buff=0)
+        → accent_bar.align_to(bg.get_center(), DOWN)
+
+Step 3: 定位 text_group (文字)
+        → text_group.next_to(accent_bar.get_right(), RIGHT, buff=0.25)
+        → text_group.align_to(bg.get_center(), DOWN)
+
+Step 4: 组装 subtitle_group = VGroup(bg, accent_bar, text_group)
+
+Step 5: 整体定位
+        → 移动到 Y = -3.85 (底部固定)
+        → 水平居中 (align_to ORIGIN, LEFT+RIGHT)
+
+Step 6: 上界约束检查
+        → if top_y > -2.8: shift(DOWN * (top_y - (-2.8)))
+```
+
+### 9.4 时序规范
+
+字幕显示必须遵循以下时序：
+
+```
+时间轴:  [内容入场] → [字幕显示] → [语音播放] → [淡出]
+         ↑           ↑            ↑          ↑
+      动画策略   FadeIn(字幕)  _play_speech()  FadeOut(全部)
+      (按animation.type)  (字幕已可见，同步)   (主内容+字幕同时)
+```
+
+**禁止**: 在语音播完后再显示字幕（会导致学习者听不到对应内容）
+
+### 9.5 多行文本处理
+
+- 单行最大字符数：15个汉字 / 30个英文字符
+- 超长文本自动拆分（优先在标点处断行）
+- 拆分后多行垂直排列：`VGroup(*lines).arrange(DOWN, buff=间距)`
+- 底衬高度随行数自动扩展
+
+### 9.6 清理安全规则
+
+调用 `_hide()` 时：
+- 必须逐项检查 `mobj in scene.mobjects`
+- **禁止** 对已 FadeOut 的对象调用 `scene.remove()`
+- **禁止** 对未添加到场景的对象调用 `scene.remove()`
+
+## 10. 排版预估最佳实践（AI 静态计算用）
 
 ### 9.1 核心参数定义
 

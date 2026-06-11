@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-字幕区容器 - 固定宽高 14.0 x 0.65 单位
+字幕区组件 - 完整实现（容器约束 + 视觉装饰层）
 
 严格约束：
 - X ∈ [-7.0, 7.0]
@@ -9,32 +9,63 @@
 - 上界 Y=-2.8（防止侵入主内容区）
 - 最多 2 行字幕，超出自动垂直滚动
 - 字幕字号默认 18（不超过18）
-- 字幕底衬+左侧强调条（借鉴 mathVideoMaker）
-- 底部固定位置（防止多行字幕抖动）
+
+视觉装饰层规范（layout.md 字幕区扩展）：
+┌─────────────────────────────── ┐  ← bg: 深色半透明底衬（自适应文字宽度）
+│▎ 文字内容...                   │  ← accent_bar: 金色强调条（与底衬等高，紧贴左边缘）
+└─────────────────────────────── ┘
+    ↑ 整体水平居中于屏幕底部 Y=-3.85
+
+坐标层级关系（装配顺序）：
+1. bg (底衬) — 最底层
+2. accent_bar (强调条) — 紧贴 bg 左边缘内侧，垂直居中（与bg等高）
+3. text_group (文字) — 紧贴 accent_bar 右侧，水平靠左，垂直居中于bg
+4. 整体 VGroup(bg, accent, text) → 移动到 Y=-3.85 → 水平居中
 """
 
-from manim import VGroup, UP
+from manim import (
+    VGroup,
+    Rectangle,
+    Text,
+    ORIGIN,
+    UP,
+    DOWN,
+    LEFT,
+    RIGHT,
+    FadeIn,
+    FadeOut,
+)
 from scripts.layout.zones.base import ZoneBase
 from scripts.layout.constants import ZoneConstants as ZC
 
 
 class SubtitleZone(ZoneBase):
-    """字幕区固定宽高容器组件
-    
+    """字幕区组件（容器约束 + 视觉渲染）
+
     职责：
     1. 提供固定宽高的物理边界（14.0 x 0.65 单位）
     2. 底部对齐（防止多行字幕抖动）
     3. 强制执行上界约束（防止侵入主内容区）
-    4. 字幕内容安全区域内布局
+    4. 渲染视觉装饰层（底衬 + 强调条 + 文字）
+
+    视觉样式（来自 ZoneConstants）：
+    - 底衬: color=#0e1828, opacity=0.72, 自适应宽度, 圆角0.14
+    - 强调条: color=#ffd166, width=0.09, 与底衬等高
+    - 文字: color=#CCCCCC, font_size=18
     """
-    
-    def __init__(self, debug: bool = False, **kwargs):
-        """初始化字幕区容器
-        
+
+    def __init__(self, scene, debug: bool = False, **kwargs):
+        """初始化字幕区组件
+
         Args:
+            scene: Manim Scene 对象（用于 play/remove 操作）
             debug: 调试模式，显示容器边框和填充
             **kwargs: 传递给 ZoneBase 的样式参数
         """
+        self.scene = scene
+        self._current_bg = None
+        self._current_accent = None
+        self._current_texts = None
         super().__init__(
             x_min=ZC.SUBTITLE_ZONE_X_MIN,
             x_max=ZC.SUBTITLE_ZONE_X_MAX,
@@ -43,63 +74,216 @@ class SubtitleZone(ZoneBase):
             debug=debug,
             **kwargs,
         )
-    
+
+    def show(self, text: str, font_size: int = ZC.SUBTITLE_FONT_SIZE) -> VGroup:
+        """渲染并显示字幕（含视觉装饰层）
+
+        装配逻辑（坐标层级关系）：
+        1. 创建文字对象 → 计算自适应底衬尺寸
+        2. 底衬 Rectangle（深色半透明，宽度=min(文字宽+内边距*2, 上限14.0)）
+        3. 强调条 Rectangle（金色，与底衬等高）→ next_to(bg.get_left(), RIGHT)
+        4. 文字 → next_to(accent.get_right(), RIGHT) + 垂直居中
+        5. 组装 VGroup → 移动到 Y=-3.85 → 水平居中
+        6. 上界约束检查（top >= -2.8 时下移）
+
+        Args:
+            text: 字幕文本内容
+            font_size: 字幕字体大小（默认18）
+
+        Returns:
+            组装完成的字幕组（bg + accent_bar + texts）
+        """
+        # 先清除上一次的字幕
+        self._hide()
+
+        # ===== 1. 创建文字对象 =====
+        if isinstance(text, str):
+            # 处理多行：按字符数拆分（每行最多15个汉字或30个英文字符）
+            lines = self._split_text_to_lines(text)
+            text_mobjects = [
+                Text(
+                    line,
+                    font_size=font_size,
+                    color=ZC.SUBTITLE_TEXT_COLOR,
+                )
+                for line in lines
+            ]
+            text_group = VGroup(*text_mobjects).arrange(
+                DOWN,
+                buff=ZC.SUBTITLE_LINE_SPACING_RATIO
+                * font_size
+                * ZC.MANIM_FONT_TO_UNIT_RATIO,
+            )
+        else:
+            # 直接传入 Mobject
+            text_group = text
+
+        # ===== 2. 计算底衬尺寸（自适应文字宽度） =====
+        text_width = text_group.width
+        text_height = text_group.height
+        bg_width = min(
+            text_width + ZC.SUBTITLE_BACKGROUND_PADDING_W * 2,
+            ZC.SCREEN_WIDTH * 0.95,  # 上限：屏幕宽度的95%
+        )
+        bg_height = text_height + ZC.SUBTITLE_BACKGROUND_PADDING_H * 2
+
+        # ===== 3. 底衬矩形（深色半透明）=====
+        bg = Rectangle(
+            width=bg_width,
+            height=bg_height,
+            fill_color=ZC.SUBTITLE_BACKGROUND_COLOR,
+            fill_opacity=ZC.SUBTITLE_BACKGROUND_OPACITY,
+            stroke_width=0,
+            corner_radius=ZC.SUBTITLE_BACKGROUND_CORNER_RADIUS,
+        )
+
+        # ===== 4. 左侧金色强调条（与底衬等高，紧贴底衬左边缘内侧）=====
+        accent_bar = Rectangle(
+            width=ZC.SUBTITLE_ACCENT_WIDTH,
+            height=bg_height,  # ★ 与底衬高度一致 ★
+            fill_color=ZC.SUBTITLE_ACCENT_COLOR,
+            fill_opacity=1.0,
+            stroke_width=0,
+            corner_radius=ZC.SUBTITLE_ACCENT_CORNER_RADIUS,
+        )
+
+        # ★ 坐标层级装配（关键步骤）★
+        # Step A: 强调条定位到底衬左边缘内侧，垂直居中
+        accent_bar.next_to(bg.get_left(), RIGHT, buff=0)
+        accent_bar.align_to(bg.get_center(), DOWN)
+
+        # Step B: 文字定位到强调条右侧，水平靠左，垂直居中于底衬
+        text_group.next_to(
+            accent_bar.get_right(), RIGHT, buff=ZC.SUBTITLE_BACKGROUND_TO_TEXT_MARGIN
+        )
+        text_group.align_to(bg.get_center(), DOWN)
+
+        # ===== 5. 组装（顺序不影响，因为各自已独立定位）=====
+        subtitle_group = VGroup(bg, accent_bar, text_group)
+
+        # ===== 6. 定位到底部固定位置 =====
+        subtitle_group.move_to(ORIGIN).align_to(ORIGIN, DOWN).shift(
+            DOWN * abs(ZC.SUBTITLE_ZONE_BOTTOM_FIXED_Y)
+        )
+
+        # 水平居中（自适应宽度时需要）
+        subtitle_group.align_to(ORIGIN, LEFT + RIGHT)
+
+        # ===== 7. 上界约束检查 =====
+        top_y = subtitle_group.get_top()[1]
+        if top_y > ZC.SUBTITLE_ZONE_TOP_Y:
+            subtitle_group.shift(DOWN * (top_y - ZC.SUBTITLE_ZONE_TOP_Y))
+
+        # 缓存引用
+        self._current_bg = bg
+        self._current_accent = accent_bar
+        self._current_texts = text_group
+
+        return subtitle_group
+
+    def _hide(self):
+        """清除当前字幕（安全模式：仅移除场景中存在的对象）
+
+        防止对已 FadeOut 或未添加到场景的对象调用 remove() 导致异常。
+        """
+        if self._current_bg is not None:
+            for mobj in [self._current_bg, self._current_accent, self._current_texts]:
+                if mobj is not None and mobj in self.scene.mobjects:
+                    self.scene.remove(mobj)
+            self._current_bg = None
+            self._current_accent = None
+            self._current_texts = None
+
+    def _split_text_to_lines(self, text: str, max_chars_per_line: int = 15) -> list:
+        """将长文本拆分为多行（按字符数）
+
+        Args:
+            text: 原始文本
+            max_chars_per_line: 每行最大字符数（中文15≈英文30）
+
+        Returns:
+            行列表
+        """
+        if len(text) <= max_chars_per_line:
+            return [text]
+
+        lines = []
+        remaining = text
+        while len(remaining) > max_chars_per_line:
+            # 在 max_chars 附近找断点（优先空格/标点）
+            cut_pos = max_chars_per_line
+            for i in range(max_chars_per_line, max(0, max_chars_per_line - 5), -1):
+                if i < len(remaining) and remaining[i] in (" ", "，", "。", "、", "；"):
+                    cut_pos = i + 1
+                    break
+            lines.append(remaining[:cut_pos])
+            remaining = remaining[cut_pos:]
+        if remaining:
+            lines.append(remaining)
+        return lines
+
+    # ============================================================
+    # 继承自 ZoneBase 的容器约束方法（保持不变）
+    # ============================================================
+
     def place_content(self, content_group: VGroup) -> VGroup:
         """将字幕内容约束在容器内，底部对齐
-        
+
         约束策略：
         1. 内容高度超过容器时按比例缩放
         2. 底部对齐（防抖动）
-        3. 强制执行上界约束（防止侵入主内容区 Y=-2.5）
-        
+        3. 强制执行上界约束（防止侵入主内容区 Y=-2.8）
+
         Args:
             content_group: 字幕内容组（Text 或 VGroup）
-            
+
         Returns:
             已定位的内容组
         """
         content_height = content_group.get_height()
-        
+
         # 1. 内容高度超过容器时按比例缩放（使用底部作为缩放锚点）
         if content_height > self._height:
             scale_factor = self._height / content_height
             content_group.scale(scale_factor, about_point=content_group.get_bottom())
-        
+
         # 2. 底部对齐（固定字幕底部位置，防抖动）
         current_bottom = content_group.get_bottom()[1]
         if abs(current_bottom - ZC.SUBTITLE_ZONE_BOTTOM_FIXED_Y) > 0.001:
             content_group.shift(UP * (ZC.SUBTITLE_ZONE_BOTTOM_FIXED_Y - current_bottom))
-        
+
         # 3. 强制执行上界约束（防止侵入主内容区）
         top_y = content_group.get_top()[1]
         if top_y > ZC.SUBTITLE_ZONE_TOP_Y:
             content_group.shift(UP * (ZC.SUBTITLE_ZONE_TOP_Y - top_y))
-        
+
         # 水平居中
         content_group.move_to([self._center_x, content_group.get_center()[1], 0])
-        
+
         self._content_group = content_group
         return content_group
-    
+
     def place_content_bottom_aligned(self, content_group: VGroup) -> VGroup:
         """将字幕内容底部对齐到固定位置（明确指定底部对齐）
-        
+
         Args:
             content_group: 字幕内容组
-            
+
         Returns:
             已定位的内容组
         """
         return self.place_content(content_group)
-    
+
     def is_content_overflow(self, content_group: VGroup) -> bool:
         """检查内容是否溢出容器
-        
+
         检查项：
         1. 内容底部是否低于字幕区下界
         2. 内容顶部是否高于字幕区上界
         """
         content_bottom = content_group.get_bottom()[1]
         content_top = content_group.get_top()[1]
-        return (content_bottom < ZC.SUBTITLE_ZONE_Y_MIN or 
-                content_top > ZC.SUBTITLE_ZONE_TOP_Y)
+        return (
+            content_bottom < ZC.SUBTITLE_ZONE_Y_MIN
+            or content_top > ZC.SUBTITLE_ZONE_TOP_Y
+        )
