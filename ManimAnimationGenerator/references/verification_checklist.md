@@ -283,6 +283,93 @@ violations = self.validate_layout(
 - [ ] 每个拆分后的场景已独立通过本清单的所有其他章节检查（布局、公式、语音等）。
 - [ ] 拆分后的场景之间无内容跳跃或逻辑断层。
 
+## 字幕负向约束（Don't）
+
+> **用途**：当字幕代码写成这样 → 画面炸成这样。Agent 必须避免以下任意一条。
+> 对应 SKILL.md 中的 [负向约束速查索引](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/SKILL.md#负向约束速查索引dont-quick-reference)。
+
+### S-D1：单条字幕超过 4 行
+
+```python
+# ❌ DON'T：拆分不充分，单条字幕过长
+bad_text = ("这是第一条字幕内容很长，"
+            "这是第二条也很长，"
+            "第三条同样很长，"
+            "第四条仍然很长，"
+            "第五条已经太多了，超过4行限制")
+
+# ✅ DO：split_utterance() 拆分，每条 ≤ 4 行
+good_segments = split_utterance(bad_text, max_lines=4)
+```
+
+**画面炸成**：字幕溢出画布/遮挡公式区域
+
+---
+
+### S-D2：字幕与语音时长不同步
+
+```python
+# ❌ DON'T：tts_text 为空或 duration 留默认值
+step = {
+    "tts_text": "",      # 空，跳过了 TTS 映射
+    "duration": 6.0,     # 固定默认值，未按实际语速计算
+}
+
+# ✅ DO：每步必须填写 tts_text，duration 估算 ≥ 实际朗读时长
+step = {
+    "tts_text": "导数的几何意义是函数图像上某一点的切线斜率",
+    "duration": 5.5,     # 估算实际朗读约 5 秒
+}
+```
+
+**画面炸成**：字幕在语音结束前消失，或语音结束后字幕仍停留
+
+---
+
+### S-D3：强调条宽度未对齐底衬
+
+```python
+# ❌ DON'T：强调条宽度固定为 0.1（过窄，贴边）
+bad_accent = Rectangle(width=0.1, height=bg.get_height())
+
+# ✅ DO：强调条宽度等于底衬宽度，居中放置
+good_accent = Rectangle(
+    width=bg.get_width(),
+    height=bg.get_height()
+).move_to(bg.get_center())
+```
+
+**画面炸成**：强调条几乎不可见，失去强调效果
+
+---
+
+### S-D4：字幕区 Y 超出边界
+
+```python
+# ❌ DON'T：字幕放在正区域，与主内容重叠
+bad_subtitle_y = 2.0  # 超出字幕区 Y ∈ [-3.4, -2.8] 范围
+
+# ✅ DO：字幕固定在字幕区
+good_subtitle_y = -3.0  # 在字幕区范围内
+```
+
+**画面炸成**：字幕与公式重叠，遮挡主内容
+
+---
+
+### S-D5：单行字幕字符超过 20
+
+```python
+# ❌ DON'T：单行字符过长，远端无法快速阅读
+bad_line = "当导数大于零时，函数在该区间单调递增"
+# 共 19 个字符 → 18pt 字号时宽度超出安全区
+
+# ✅ DO：split_utterance 限制每行 ≤ 20 字符
+good_lines = split_utterance(bad_line, max_chars_per_line=20)
+```
+
+**画面炸成**：字幕溢出屏幕边缘
+
 ## 代码质量
 
 - [ ] 包含所有必需的 import（manim, manim_voiceover）。

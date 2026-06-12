@@ -263,3 +263,71 @@ manim -pql gtts-example.py --disable_caching
 - [ ] 依赖已完整安装（PortAudio、SoX、gettext）
 - [ ] 渲染命令包含 --disable_caching
 - [ ] 若使用 EdgeTTS，已告知用户发音限制
+
+## 负向约束（Don't）
+
+> **用途**：当 TTS 代码写成这样 → 画面/音画炸成这样。Agent 必须避免以下任意一条。
+> 对应 SKILL.md 中的 [负向约束速查索引](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/SKILL.md#负向约束速查索引dont-quick-reference)。
+
+### T-D1：TTS 文本未经过符号映射
+
+```python
+# ❌ DON'T：直接发送 LaTeX 给 TTS 引擎
+tts_text = r"lim_{x→0} sin(x)/x = 1"  # 下划线、上标符号被直接读出
+
+# ✅ DO：必须通过 math_symbols_to_speech() 映射
+from tex_tools import math_symbols_to_speech
+tts_text = math_symbols_to_speech(r"lim_{x→0} sin(x)/x = 1")
+# 输出: "lim x趋近于0 sin(x)除以x 等于1"
+```
+
+**画面炸成**：TTS 读出"LaTeX 代码"，听众以为是系统故障
+
+---
+
+### T-D2：TTS 文本包含 LaTeX 分隔符
+
+```python
+# ❌ DON'T：LaTeX 分隔符出现在 TTS 文本中
+bad = r"$x^2$ 的导数是 $2x$"  # $ 符号被 TTS 读出
+
+# ✅ DO：TTS 前清除 LaTeX 分隔符
+good = "x的平方的导数是2x"    # 或通过映射函数处理
+```
+
+**画面炸成**：TTS 读出 "dollar x caret 2 dollar"，严重干扰收听
+
+---
+
+### T-D3：highlight_range 超出公式字符范围
+
+```python
+# ❌ DON'T：highlight_range 指定了不存在的字符位置
+bad = {
+    "content": [{"text": r"$\frac{d}{dx}x^2 = 2x$", "type": "formula"}],
+    "highlight_range": [50, 60]   # 公式只有约 20 字符
+}
+
+# ✅ DO：highlight_range 必须覆盖 content 中 formula 项的字符范围
+formula_text = r"$\frac{d}{dx}x^2 = 2x$"
+good = {"highlight_range": [0, len(formula_text)]}
+```
+
+**画面炸成**：高亮区域与公式不对应，字幕动画高亮了错误的内容
+
+---
+
+### T-D4：duration 留默认值（未估算）
+
+```python
+# ❌ DON'T：所有 step 的 duration 使用固定值
+step = {"duration": 6.0} * 20   # 全部 6 秒
+
+# ✅ DO：每步根据 tts_text 实际字数估算朗读时长
+step = {
+    "tts_text": "导数的几何意义是函数图像上某一点的切线斜率",
+    "duration": 5.5,             # 约 20 字 / 4字/秒 ≈ 5秒
+}
+```
+
+**画面炸成**：字幕闪退或长时间停留，音画节奏混乱

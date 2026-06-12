@@ -284,3 +284,82 @@ AB != BA
 |
 结束
 ```
+
+## 负向约束（Don't）
+
+> **用途**：当工作流步骤写成这样 → 直接导致返工或事故。Agent 必须避免以下任意一条。
+> 对应 SKILL.md 中的 [负向约束速查索引](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/SKILL.md#负向约束速查索引dont-quick-reference)。
+
+### W-D1：跳过教学草案 Markdown 用户确认
+
+```python
+# ❌ DON'T：直接生成 JSON 和代码，跳过 Markdown 草案
+step_json = generate_json(topic)
+step_code = generate_code(step_json)  # 无用户确认直接生产
+
+# ✅ DO：必须经过 3 步确认
+draft_md = generate_draft_markdown(topic)  # 1. 生成草案
+# → 用户审核 Markdown（教学路径/内容/时长）
+step_json = update_json_from_draft(draft_md)  # 2. 更新 JSON
+# → 用户审核 JSON 细节
+step_code = generate_code(step_json)  # 3. 生成代码
+```
+
+**画面炸成**：生成内容与用户意图不符 → 返工重做
+
+---
+
+### W-D2：跳过 Gate 3 程序化布局校验
+
+```python
+# ❌ DON'T：代码写完直接渲染，跳过 validate_layout()
+def construct(self):
+    formula = MathTex(r"...")
+    self.add(formula)
+    self.play(Write(formula))
+    self.render()    # 直接渲染，未调用 validate_layout()
+
+# ✅ DO：代码完成后、渲染前必须调用
+violations = self.validate_layout(all_mobs)
+if violations:
+    print("布局违规:", violations)
+    return  # 禁止渲染，修复后重试
+```
+
+**画面炸成**：布局问题仅在渲染后肉眼可见，修复成本高
+
+---
+
+### W-D3：跳过教学草案时长估算
+
+```python
+# ❌ DON'T：每个原子 duration 留默认值 6.0（未按实际内容估算）
+atoms = [{"id": "xxx", "duration": 6.0}] * 20  # 全部默认时长
+
+# ✅ DO：每个原子估算人工制作时长，填入 draft_md
+atoms_estimated = [
+    {"id": "simple_def", "estimated_minutes": 5},    # 简单定义
+    {"id": "complex_proof", "estimated_minutes": 15}, # 复杂证明
+    {"id": "animation_derivation", "estimated_minutes": 12}  # 动画推导
+]
+```
+
+**画面炸成**：用户无法估计总制作时长，项目管理失控
+
+---
+
+### W-D4：跨域混用坐标参考系
+
+```python
+# ❌ DON'T：混用数学坐标系和像素坐标系
+bad_formula = MathTex(r"...").move_to([300, 200, 0])  # 像素坐标
+bad_graph = Circle().move_to(axes.c2p(1, 2))          # 数学坐标
+
+# ✅ DO：统一使用数学坐标系（Y轴向上）
+all_elements = VGroup(
+    MathTex(r"..."),
+    Circle()
+).move_to(axes.c2p(0, 2))
+```
+
+**画面炸成**：公式与图形位置完全不匹配

@@ -24,7 +24,7 @@ from scripts.layout.engine import LayoutEngine, LayoutMode, LayoutDecision
 class LayoutScene(Scene):
     """布局场景基类，提供符合规范的布局方法"""
 
-    def __init__(self, debug: bool = False, **kwargs):
+    def __init__(self, debug: bool = True, **kwargs):
         super().__init__(**kwargs)
         self.debug = debug
         self._subtitle_zone: Optional[SubtitleZone] = None
@@ -303,13 +303,40 @@ class LayoutScene(Scene):
             raise ValueError(f"未知区域: {region}")
 
         # ---- 逐对象检查区域溢出 + 屏幕越界 ----
-        for obj in placed_objects:
+        # 坐标日志（debug 模式）：每个对象输出快照卡片 + 末尾汇总表
+        if self.debug:
+            print(f"\n[LayoutScene] validate_layout() 坐标快照  region={region}")
+            print(
+                f"  区域边界: x∈[{x_min:.2f}, {x_max:.2f}]  y∈[{y_min:.2f}, {y_max:.2f}]"
+            )
+            print("  ─" * 70)
+
+        for idx, obj in enumerate(placed_objects, 1):
             obj_name = getattr(obj, "name", None) or type(obj).__name__
+            obj_type = type(obj).__name__
 
             left = obj.get_left()[0]
             right = obj.get_right()[0]
             bottom = obj.get_bottom()[1]
             top = obj.get_top()[1]
+            cx, cy = obj.get_center()[0], obj.get_center()[1]
+
+            # ── debug 坐标快照卡片 ──
+            if self.debug:
+                # 快速判断是否在区域内
+                in_region = (
+                    left >= x_min
+                    and right <= x_max
+                    and bottom >= y_min
+                    and top <= y_max
+                )
+                status = "✓ OK" if in_region else "✗ 越界"
+                print(
+                    f"  #{idx:02d} {obj_type:<20s} | name={obj_name:<20s} | "
+                    f"center=({cx:>7.2f}, {cy:>6.2f}) | "
+                    f"X=[{left:>6.2f}, {right:<6.2f}] Y=[{bottom:>6.2f}, {top:<6.2f}] | "
+                    f"w={obj.width:.2f} h={obj.height:.2f} | {status}"
+                )
 
             # 检查区域溢出
             if right > x_max:
@@ -389,6 +416,13 @@ class LayoutScene(Scene):
                         "detail": f"{obj_name} 侵入字幕区 (底部 Y={bottom:.2f} < 字幕区上界 {ZoneConstants.SUBTITLE_ZONE_Y_MAX:.2f})",
                     }
                 )
+
+        # debug 分隔线
+        if self.debug:
+            print("  ─" * 70)
+            print(
+                f"[LayoutScene] 共 {len(placed_objects)} 个对象  违规 {len(violations)} 项"
+            )
 
         # ---- 两两重叠检查（含白名单过滤）----
         pairs_to_check = overlap_pairs
@@ -650,19 +684,25 @@ class LayoutScene(Scene):
                     )
 
         # ---- 输出结果 ----
-        if violations and self.debug:
-            print(f"\n[LayoutScene.validate_layout] 发现 {len(violations)} 项违规:")
-            for i, v in enumerate(violations, 1):
-                print(f"  [{i}] {v['type']}: {v['detail']}")
-                print(f"       期望: {v['expected']}")
-                print(f"       实际: {v['actual']}")
+        # debug 模式：无论有无违规都输出快照汇总；发现违规时附加详细报告
+        if self.debug:
+            if violations:
+                print(f"\n[LayoutScene.validate_layout] 发现 {len(violations)} 项违规:")
+                for i, v in enumerate(violations, 1):
+                    print(f"  [{i}] {v['type']}: {v['detail']}")
+                    print(f"       期望: {v['expected']}")
+                    print(f"       实际: {v['actual']}")
+            else:
+                print(
+                    f"[LayoutScene.validate_layout] 全部 {len(placed_objects)} 个对象布局合规 ✓"
+                )
 
         return violations
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 重叠白名单：预定义模式常量 + 模式匹配方法
     #
-    # 唯一判定基准（与 SKILL.md §重叠白名单机制 一致）：
+    # 唯一判定基准（与 SKILL.md 重叠白名单机制 一致）：
     #   语义相关 → 允许重叠    语义无关 → 禁止重叠（报告 ELEMENT_OVERLAP）
     # 以下模式是"语义相关性"的近似实现：按 Manim 类型名推断语义关系。
     # ═══════════════════════════════════════════════════════════════════════════
@@ -831,7 +871,7 @@ class LayoutScene(Scene):
     ) -> bool:
         """检查一对对象是否匹配某个预定义的重叠豁免模式。
 
-        唯一判定基准（与 SKILL.md §重叠白名单机制 一致）：
+        唯一判定基准（与 SKILL.md 重叠白名单机制 一致）：
             语义相关 → 允许重叠    语义无关 → 禁止重叠
         本方法通过类型匹配推断语义相关性（按 ALLOWED_PATTERNS 中的模式定义）。
 

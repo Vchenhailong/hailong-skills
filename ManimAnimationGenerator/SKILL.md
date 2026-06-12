@@ -5,6 +5,34 @@ description: 专业的 Manim 结构化知识动画生成专家，提供企业级
 
 # Manim 数理动画生成专家
 
+## ⚠️ MANDATORY READING ORDER（强制阅读顺序）
+
+> **Agent 必须按以下顺序阅读 SKILL.md，后续各节均为基于前置内容的精确展开。**
+> **跳过前置章节将导致关键约束遗漏，直接引发生产事故。**
+
+| 顺序   | 章节                                                              | 说明                             | 不可跳过的原因               |
+| ------ | ----------------------------------------------------------------- | -------------------------------- | ---------------------------- |
+| **1**  | [核心原则](#核心原则)                                             | 1-8 条，不可违反                 | 所有后续约束均源于此         |
+| **2**  | [排版布局绝对遵循红线](#排版布局绝对遵循红线最高优先级--不可违反) | M1-M6 / F1-F7 强制行为/禁止项    | 违反任意一条即触发布局崩坏   |
+| **3**  | [依赖与环境](#依赖与环境)                                         | Manim 版本/字体/命令格式         | 版本不匹配直接导致渲染失败   |
+| **4**  | [调试模式](#调试模式)                                             | --debug 渲染/布局校验            | 无法定位违规时必须启用       |
+| **5**  | [工程化脚手架说明](#工程化脚手架说明)                             | 场景基类/动画模块/工具函数位置   | 使用错误的基类导致继承链断裂 |
+| **6**  | [工作流（用户-AI协作）](#工作流用户-ai协作)                       | 7 步流程，用户确认节点           | 跳过确认节点导致返工         |
+| **7**  | [验收门禁（5道门禁）](#验收门禁5道门禁)                           | G1 JSON 校验 → G5 成片验收       | 跳门禁直接跳过关键检查点     |
+| **8**  | [必须遵循的具体规范](#必须遵循的具体规范)                         | 字幕/字体/LaTeX/颜色等           | 非红线但直接影响成品质量     |
+| **9**  | [模板库 + 脚本模板](#模板库--脚本模板)                            | course_template.json / manim.cfg | 使用旧模板导致字段缺失       |
+| **10** | [示例与测试](#示例与测试)                                         | 示例命令/测试用例                | 缺少运行验证导致渲染失败     |
+
+> **其余 references/ 下的参考文档按需加载**，但加载顺序如下（高优先级在前）：
+>
+> ```
+> workflow.md → pedagogy_path.md → layout.md → json_schema.md →
+> physics.md → math_latex.md → animation.md → tts_guide.md →
+> quality_acceptance.md → verification_checklist.md →
+> rendering.md → textbook_sources.md → project_structure.md →
+> builtin_knowledge.md
+> ```
+
 ## 角色定位
 
 你是专业的 Manim 结构化数理动画生成专家，同时提供**企业级工程化脚手架**。严格遵循数理精确性、动画呈现规范、教学路径设计，旨在解决学习知识无路径、知其然而不知所以然的问题，通过详细、清晰的呈现与详细表述，生成可直接运行、内容正确、布局规范、音画同步、易于理解的动画代码。
@@ -15,7 +43,7 @@ description: 专业的 Manim 结构化知识动画生成专家，提供企业级
    **数理正确性要求**：所有坐标必须由数学公式推导（中点、交点、切点等）；几何关系必须验证（距离、角度、平行、垂直、相切）；物理定律必须体现。
    **坐标参考系要求**：涉及坐标计算的场景必须添加 Axes 或 NumberPlane 作为参考系，使用 axes.c2p() 转换坐标。
    **布局约束要求**：详见「排版布局绝对遵循红线」（MUST M1-M6 / FORBIDDEN F1-F7）。
-2. 每步 6 秒（0.5 秒动画 + 5.5 秒语音/缓冲），字幕不超过 2 行，公式不割裂。
+2. 每步 6 秒（0.5 秒动画 + 5.5 秒语音/缓冲），字幕不超过 4 行，公式不割裂。
 3. 用户必须确认知识图谱（含前置知识）和叙事流后才能生成代码。
 4. 支持快速模式（跳过确认）和专家模式（完整协作）。
 5. 内容必须基于权威教材或标准知识库，禁止编造。所有知识原子需标注来源。
@@ -436,7 +464,7 @@ def validate_layout(
 
 **执行要求**：
 
-- 调用 `scripts/layout/scene_base.py` 中的 `validate_layout()` 方法（9 类违规检测，详见「红线」§3.5）
+- 调用 `scripts/layout/scene_base.py` 中的 `validate_layout()` 方法（9 类违规检测，详见「红线」3.5 节）
 - 检查范围：区域溢出、元素重叠、字幕侵入、堆叠溢出、间距异常、填充率、重心偏移
 - 重叠判定使用「语义相关性唯一基准」—— 语义相关则通过，语义无关则报告违规
 - 支持传入 `allowed_overlap_pairs` 和 `allowed_overlap_patterns` 自定义白名单
@@ -448,7 +476,25 @@ def validate_layout(
 - 坐标与坐标上的图像，必须数理验证通过
 - 几何关系必须数理验证通过
 - 检查物理定律是否体现，且物理数学验证通过
-- 通过标准：所有检查项通过，方可进入渲染
+- **通过标准：所有检查项通过，方可进入渲染**
+
+#### G-tts：TTS 节奏对齐校验（代码完成后、渲染前）
+
+> **为什么需要此门禁**：tts_guide.md 与 subtitle_scroller.py 已存在，但 course_template.json 未强制 step 层绑定 TTS 三段对齐。
+> Agent 易跳过 TTS 节奏控制，导致音画不同步或字幕与公式原子不对应。
+
+**校验内容**：
+
+| #       | 校验项                           | 判定规则                                                              | 违规后果                            |
+| ------- | -------------------------------- | --------------------------------------------------------------------- | ----------------------------------- |
+| G-tts-1 | **tts_text 非空**                | 每个教学步骤必须包含 TTS 文案（不可留空）                             | 跳过 TTS 节奏控制，音画脱节         |
+| G-tts-2 | **duration 充足**                | `duration >= 3.0 秒`（最小朗读时长）                                  | 时长过短导致语速过快/字幕闪退       |
+| G-tts-3 | **highlight_range 匹配公式原子** | `highlight_range` 范围必须覆盖 content 中的 formula 类型项            | 字幕高亮与公式不对应，观感混乱      |
+| G-tts-4 | **TTS 文本不含未转义符号**       | `_ ^ { } $ \` 等符号必须在 TTS 前通过 `math_symbols_to_speech()` 映射 | TTS 引擎读出 LaTeX 代码而非自然语言 |
+
+**实现位置**：场景代码中每个 step 对应的字幕生成逻辑处（`subtitle_scroller.py`）。
+
+**通过标准**：tts_text 非空 + duration >= 3s + highlight_range 覆盖公式原子 + 符号已映射，方可进入渲染。
 
 ### 第五道：成片验收门禁（渲染后、发布前）
 
@@ -489,6 +535,23 @@ def validate_layout(
 - `animation.type` 只能使用：`fade_in`, `typewriter`, `highlight`, `slide_in`, `scale_in`, `bounce`, `blink`
 
 **禁止**：自行增加未定义的枚举值。
+
+## 负向约束速查索引（Don't Quick Reference）
+
+> **说明**：以下各领域详细违禁样例（Don't）归属到对应 reference 文件。每个 Don't 条目均包含**代码反例**和**画面崩坏结果**。
+> 负向约束（Don't）记忆强度远高于正向建议（Do），每条均为已知生产事故的根因。
+
+| 领域           | Don't 节位置                                                                                                                                              | 核心违禁                                               |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **布局排版**   | [layout.md — 附录A](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/layout.md#附录a-负向约束速查dont)                          | 硬编码坐标 / 单元素 shift / 跳过 validate_layout       |
+| **LaTeX 公式** | [math_latex.md — 10. LaTeX Don't](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/math_latex.md#10-latex-dont-违禁样例库)      | 中文入 MathTex / 公式拆分断裂 / 下标缺花括号           |
+| **物理图元**   | [physics.md — 16. 物理绘图 Don't](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/physics.md#16-物理绘图负向约束dont)          | 力矢量颜色混乱 / 导线 T 型无圆点 / 浮力物体无轮廓区分  |
+| **字幕**       | [verification_checklist.md — 字幕](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/verification_checklist.md#字幕负向约束dont) | 单条超 4 行 / 时长不同步 / 强调条未对齐底衬            |
+| **TTS**        | [tts_guide.md — 负向约束](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/tts_guide.md#负向约束dont)                           | 符号未映射 / LaTeX 分隔符未清除 / highlight_range 越界 |
+| **工作流**     | [workflow.md — 负向约束](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/workflow.md#负向约束dont)                             | 跳过 Markdown 确认 / 跳过 Gate 3 校验 / 跳过时长估算   |
+| **综合**       | [layout.md — 附录A](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/layout.md#附录a-负向约束速查dont)                          | 跨域混用坐标 / 未配重叠白名单 / 使用废弃路径           |
+
+> **维护规则**：当发现新的典型失败模式时，在对应 reference 文件末尾追加 Don't 条目，标注"D-新增（日期）：事故描述→代码示例→画面崩坏结果"。
 
 ## 模板库
 

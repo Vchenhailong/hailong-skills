@@ -9,7 +9,49 @@ from manim import Text, MathTex  # type: ignore
 
 
 def validate_latex(expr):
-    """检查 LaTeX 表达式是否基本合法"""
+    """检查 LaTeX 表达式是否基本合法（含 P1/P4/P5 及补充规则）"""
+    # ---- P6：多行环境定界符（前置） ----
+    # 在检查嵌套定界符之前先处理，避免被后续 $...$ 匹配切断
+    multi_env_pattern = re.compile(
+        r"\\begin\s*\{(align|array|gather|multline)\*?\}.*?\\end\s*\{\1\}",
+        re.DOTALL,
+    )
+    for m in multi_env_pattern.finditer(expr):
+        block = m.group()
+        if block.startswith("$") or block.endswith("$"):
+            return False, (
+                "多行环境 \\begin{...}...\\end{...} 必须以 $$...$$ 包裹，" "而非 $...$"
+            )
+
+    # ---- P1：嵌套定界符检测 ----
+    # 逐字符扫描，识别 $...$ 块，检查块内是否有另一个 $ 字符
+    pos = 0
+    length = len(expr)
+    while pos < length:
+        if expr[pos] == "$":
+            # 进入 math 模式，寻找结束 $
+            inner_start = pos + 1
+            j = inner_start
+            while j < length:
+                if expr[j] == "\\":
+                    j += 2  # 跳过转义字符
+                    continue
+                if expr[j] == "$":
+                    # 找到结束 $，检查块内是否有另一个 $
+                    inner = expr[inner_start:j]
+                    if "$" in inner:
+                        return False, (
+                            "嵌套定界符：$...$ 内不能包含另一个 $。"
+                            " 内部 '$...$' 必须改用 \\( ... \\) 或 \\text{} 包裹"
+                        )
+                    break
+                j += 1
+            if j >= length or expr[j] != "$":
+                return False, "$...$ 定界符未配对"
+            pos = j + 1
+            continue
+        pos += 1
+
     # 检查花括号匹配
     if expr.count("{") != expr.count("}"):
         return False, "花括号不匹配"
@@ -24,11 +66,213 @@ def validate_latex(expr):
         if cmd in expr:
             return False, f"包含非法命令 {cmd}"
 
-    # 检查 MathTex 中是否有中文
+    # 检查 MathTex 中是否有中文（MathTex 阶段，非 Tex 阶段）
+    # 注意：Tex 中的 $...$ 数学部分也走同样规则
     if re.search(r"[\u4e00-\u9fff]", expr):
-        return False, "MathTex 中不能包含中文，请使用 Tex"
+        # 如果中文在 $...$ 内（而非在 \text{} 中），则整个表达式不适合 MathTex
+        # 先检查中文是否被 \text{} 包裹
+        safe_chinese = True
+        for m in re.finditer(r"[\u4e00-\u9fff]", expr):
+            ch = m.group()
+            # 向前查找最近的 $ 或 \text{
+            prefix = expr[: m.start()]
+            # 找最近未闭合的 \text{
+            text_open = prefix.count(r"\text{") - prefix.count(r"\text{}")
+            if text_open == 0:
+                safe_chinese = False
+                break
+        if not safe_chinese:
+            return False, "MathTex 中不能包含中文，请使用 Tex 或 \\text{} 包裹"
+
+    # ---- P4：斜杠除法检测 ----
+    # 在 math 表达式中，除法必须用 \frac{分子}{分母}，而非斜杠 /
+    # 单位形式（m/s, kg/m^3 等）除外：排除 "数字/数字" 或 "单字母/单字母" 的单位模式
+    # 提取所有 $...$ 块内容进行检测
+    dollar_iter = re.finditer(r"\$([^\$]+)\$", expr)
+    for m in dollar_iter:
+        block = m.group(1)
+        # 排除单位模式：前后都是单字符字母/数字的模式（常见单位）
+        # 排除已经用 \frac 表示的
+        slash_matches = re.finditer(r"/", block)
+        for sm in slash_matches:
+            slash_pos = sm.start()
+            left = block[:slash_pos].strip()
+            right = block[slash_pos + 1 :].strip()
+            # 单位判断：左侧或右侧是纯符号（字母、数字、指数），整体是科学计数或单位
+            # 常见单位模式：m/s, kg/m^3, N/m^2, J/(kg·K) 等
+            if re.match(r"^[a-zA-Zα-ωΑ-Ω0-9\^]+$", left) and re.match(
+                r"^[a-zA-Zα-ωΑ-Ω0-9\^]+$", right
+            ):
+                # 可能是单位，跳过
+                continue
+            if re.match(r"^\d+(\.\d+)?$", left) and re.match(r"^\d+(\.\d+)?$", right):
+                # 科学计数分子/分母，跳过
+                continue
+            # 纯数学表达式中的斜杠除法：必须提示改为 \frac
+            return (
+                False,
+                f"斜杠除法：数学表达式中除法必须用 \\frac{{}}{{}}，"
+                f"不能用 /。块 '.../{right}' 需改为 \\frac{{{left}}}{{{right}}}",
+            )
+
+    # ---- P5：表达式碎片化检测 ----
+    # 由数学运算符（=, +, -, <, >, \leq, \geq, \to 等）连接的量不得被拆到多个 $...$ 块
+    # 策略：提取所有 $...$ 块，检测是否有跨块的二元运算符
+    blocks = [m.group(1) for m in re.finditer(r"\$([^\$]+)\$", expr)]
+    if len(blocks) > 1:
+        # 检查连续块之间是否被运算符连接（而非逗号、分号分隔）
+        # 找 $ 符号的位置
+        dollar_positions = [m.start() for m in re.finditer(r"\$", expr)]
+        # 检查两个相邻 $...$ 之间是否有运算符
+        ops = re.compile(
+            r"(?<![\\a-zA-Z])(=|\+|-|<|>|<=|>=|\\leq|\\le|\\geq|\\ge|\\to|"
+            r"\\rightarrow|\\Rightarrow|\\approx|\\equiv)"
+        )
+        # 扫描 $ 符号对
+        for i in range(0, len(dollar_positions) - 1, 2):
+            seg_start = dollar_positions[i + 1]  # 第一个块的结束 $
+            seg_end = dollar_positions[i + 2]  # 第二个块的开始 $
+            between = expr[seg_start:seg_end]
+            # 如果两段之间有运算符但没有分隔符（逗号/分号），则碎片化
+            if ops.search(between) and not re.search(r"[，,;]", between):
+                return (
+                    False,
+                    "表达式碎片化：由运算符连接的数学量必须位于同一个 $...$ 内，"
+                    "禁止拆分为多个 $...$ 块",
+                )
+
+    # ---- 中文下标 \text{} 包裹检测（补充规则 3）----
+    # 检查 _ 后的内容是否包含中文且未用 \text{} 包裹
+    # 匹配 $...$ 块内的下标格式
+    for block in [m.group(1) for m in re.finditer(r"\$([^\$]+)\$", expr)]:
+        # 找 _ 后跟 { } 的模式
+        sub_pattern = re.compile(r"_(\{[^{}]*\})")
+        for sm in sub_pattern.finditer(block):
+            subscript_content = sm.group(1)[1:-1]  # 去掉 { }
+            if re.search(r"[\u4e00-\u9fff]", subscript_content):
+                if not subscript_content.startswith(r"\text"):
+                    return (
+                        False,
+                        f"中文下标未包裹：'$v_{{{subscript_content}}}$'"
+                        f" 需改为 '$v_{{\\text{{{subscript_content}}}}}$'",
+                    )
 
     return True, "OK"
+
+
+def validate_latex_strict(expr):
+    """
+    严格模式：完整 P1/P4/P5 + 补充规则检测。
+    返回 (is_valid, messages)，messages 为字符串列表（含所有违规描述）。
+    """
+    messages = []
+    errors = []
+
+    # ---- P6：多行环境定界符 ----
+    multi_env_pattern = re.compile(
+        r"\\begin\s*\{(align|array|gather|multline)\*?\}.*?\\end\s*\{\1\}",
+        re.DOTALL,
+    )
+    for m in multi_env_pattern.finditer(expr):
+        block = m.group()
+        if block.startswith("$") or block.endswith("$"):
+            errors.append(
+                "P6 多行环境定界符：\\begin{...}...\\end{...}"
+                " 必须以 $$...$$ 包裹，而非 $...$"
+            )
+
+    # ---- P1：嵌套定界符 ----
+    pos = 0
+    length = len(expr)
+    dollar_stack = []  # 存储嵌套的 $ 位置
+    while pos < length:
+        if expr[pos] == "$":
+            # 检查是否与已开 $ 配对（奇数个 $ 嵌套）
+            inner_start = pos + 1
+            j = inner_start
+            while j < length:
+                if expr[j] == "\\":
+                    j += 2
+                    continue
+                if expr[j] == "$":
+                    break
+                j += 1
+            if j < length and expr[j] == "$":
+                inner = expr[inner_start:j]
+                if "$" in inner:
+                    errors.append(
+                        "P1 嵌套定界符：$...$ 内不能包含另一个 $。"
+                        " 内部 '$' 需改用 \\( ... \\) 或 \\text{} 包裹"
+                    )
+                    break
+            pos = j + 1
+            continue
+        pos += 1
+
+    # 括号匹配
+    if expr.count("{") != expr.count("}"):
+        errors.append("花括号不匹配")
+    if expr.count("(") != expr.count(")"):
+        errors.append("圆括号不匹配")
+
+    # 非法命令
+    illegal = [r"\ce", r"\begin{circuitikz}", r"\begin{tikz}"]
+    for cmd in illegal:
+        if cmd in expr:
+            errors.append(f"包含非法命令 {cmd}")
+
+    # ---- P4：斜杠除法 ----
+    blocks = [m.group(1) for m in re.finditer(r"\$([^\$]+)\$", expr)]
+    for block in blocks:
+        slash_matches = list(re.finditer(r"/", block))
+        for sm in slash_matches:
+            slash_pos = sm.start()
+            left = block[:slash_pos].strip()
+            right = block[slash_pos + 1 :].strip()
+            # 单位/科学计数跳过
+            if re.match(r"^[a-zA-Zα-ωΑ-Ω0-9\^]+$", left) and re.match(
+                r"^[a-zA-Zα-ωΑ-Ω0-9\^]+$", right
+            ):
+                continue
+            if re.match(r"^\d+(\.\d+)?$", left) and re.match(r"^\d+(\.\d+)?$", right):
+                continue
+            errors.append(
+                f"P4 斜杠除法：'/{right}' 需改为 " f"\\frac{{{left}}}{{{right}}}"
+            )
+
+    # ---- P5：表达式碎片化 ----
+    if len(blocks) > 1:
+        dollar_positions = [m.start() for m in re.finditer(r"\$", expr)]
+        ops = re.compile(
+            r"(?<![\\a-zA-Z])(=|\+|-|<|>|<=|>=|\\leq|\\le|\\geq|\\ge|"
+            r"\\to|\\rightarrow|\\Rightarrow|\\approx|\\equiv)"
+        )
+        for i in range(0, len(dollar_positions) - 1, 2):
+            seg_start = dollar_positions[i + 1]
+            seg_end = dollar_positions[i + 2]
+            between = expr[seg_start:seg_end]
+            if ops.search(between) and not re.search(r"[，,;]", between):
+                errors.append(
+                    "P5 表达式碎片化：由运算符连接的数学量必须位于"
+                    "同一个 $...$ 内，禁止拆分为多个块"
+                )
+                break
+
+    # ---- 中文下标 ----
+    for block in blocks:
+        sub_pattern = re.compile(r"_(\{[^{}]*\})")
+        for sm in sub_pattern.finditer(block):
+            subscript_content = sm.group(1)[1:-1]
+            if re.search(r"[\u4e00-\u9fff]", subscript_content):
+                if not subscript_content.startswith(r"\text"):
+                    errors.append(
+                        f"中文下标未包裹：'$v_{{{subscript_content}}}$'"
+                        f" 需改为 '$v_{{\\text{{{subscript_content}}}}}$'"
+                    )
+
+    is_valid = len(errors) == 0
+    messages = errors if errors else ["全部规则通过"]
+    return is_valid, messages
 
 
 def split_long_formula(expr, max_width=12):

@@ -930,3 +930,117 @@ def build_buoyancy_scene(object_mass, object_volume, liquid_density):
 | 电磁场线   | 电场线红色，磁场线蓝色，电流绿色 | 方向和疏密       |
 | 液体容器   | 多边形轮廓 + 半透明蓝色填充      | 烧杯、量筒等器材 |
 | 运动轨迹   | GRAY_C 虚线 + 蓝色方向箭头       | 运动路径         |
+
+## 16. 物理绘图负向约束（Don't）
+
+> **用途**：当物理图元代码写成这样 → 画面炸成这样。Agent 必须避免以下任意一条。
+> 对应 SKILL.md 中的 [负向约束速查索引](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/SKILL.md#负向约束速查索引dont-quick-reference)。
+
+### P-D1：力矢量颜色不符合力-色映射表
+
+```python
+# ❌ DON'T：使用不符合规范的配色（与背景/其他力混淆）
+bad_arrow = Arrow(color=ORANGE)    # 橙色不在五色映射中
+
+# ✅ DO：严格遵循力-色映射表
+# G=红(H0°) / f=黄(H51°) / F=绿(H142°) / N=蓝(H217°) / T=紫(H272°)
+# 力学域内最小 ΔH=51°，确保高辨识度
+gravity = Arrow(color="#EF4444")   # 红
+friction = Arrow(color="#EAB308")   # 黄
+push = Arrow(color="#22C55E")       # 绿
+normal = Arrow(color="#3B82F6")     # 蓝
+tension = Arrow(color="#A855F7")    # 紫
+```
+
+**画面炸成**：颜色相近无法区分受力物体，物理关系混乱
+
+---
+
+### P-D2：力矢量从物体中心出发（而非接触点）
+
+```python
+# ❌ DON'T：所有力统一从物体中心引出 → 混淆作用点
+bad = Arrow(start=object.get_center(), end=...)
+
+# ✅ DO：力从接触点/作用面出发
+good = Arrow(start=object.get_corner(DL), end=...)  # 摩擦力从接触面出发
+good = Arrow(start=object.get_top(), end=...)       # 支持力从底部接触面
+```
+
+**画面炸成**：合力方向看起来从重心发出，与物理受力分析图不符
+
+---
+
+### P-D3：电路图导线 T 型连接处无圆点
+
+```python
+# ❌ DON'T：导线交叉处无圆点（L 型连接被误认为 T 型）
+# 导线1: (0,0)→(2,0)
+# 导线2: (2,0)→(2,2)
+# 导线3: (0,2)→(2,2)  ← 接入点无圆点
+
+# ✅ DO：T 型连接处加 Dot 元件（IEC 60617 标准）
+junction = Dot(point=axes.c2p(2, 0), color=WHITE, radius=0.05)
+```
+
+**画面炸成**：T 型连接与 L 型连接视觉无法区分 → 回路拓扑错误
+
+---
+
+### P-D4：电场线/磁感线方向错误
+
+```python
+# ❌ DON'T：电场线从负电荷出发（或方向任意）
+bad = FieldLine(start=negative_charge, end=positive_charge)
+
+# ✅ DO：电场线从正电荷出发、终止于负电荷（IEC 60617-03）
+good = FieldLine(start=positive_charge, end=negative_charge, arrows=True)
+```
+
+**画面炸成**：电场线方向与物理定义相反，误导学生
+
+---
+
+### P-D5：浮力场景物体与液体无轮廓区分
+
+```python
+# ❌ DON'T：物体与液体颜色/透明度相同，无法区分
+bad_object = Polygon(fill_opacity=0.4, color=BLUE)
+bad_liquid = Polygon(fill_opacity=0.4, color=BLUE)
+
+# ✅ DO：物体使用实色填充 + 描边，液体使用半透明无描边
+good_object = Polygon(fill_opacity=0.8, color=ORANGE, stroke_width=2)
+good_liquid = Polygon(fill_opacity=0.3, color=CYAN, stroke_width=0)
+```
+
+**画面炸成**：物体淹没在液体中完全不可见
+
+---
+
+### P-D6：磁感线不闭合
+
+```python
+# ❌ DON'T：磁感线从 N 极出发后不回到 S 极
+bad = FieldLine(start=north_pole, end=arbitrary_point)
+
+# ✅ DO：磁感线必须形成闭合路径（与电场线区分）
+good = FieldLine(start=north_pole, curve_to_south_pole, closed=True)
+```
+
+**画面炸成**：与电场线混淆，物理图不符合规范
+
+---
+
+### P-D7：物理标注使用 Unicode 而非 LaTeX
+
+```python
+# ❌ DON'T：物理量标注使用 Unicode
+bad = Text("V排", font="SimHei")
+bad = MathTex(r"V_排")               # 下划线在 LaTeX 中表示下标，需正确花括号
+
+# ✅ DO：物理量标注使用 MathTex + \text{} 包裹中文下标
+good = MathTex(r"V_{\text{排}}")     # 浮力场景排开液体体积
+good = MathTex(r"F_{\text{弹}}")     # 弹力
+```
+
+**画面炸成**：下标显示错误或中文字符无法编译
