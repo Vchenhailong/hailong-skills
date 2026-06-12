@@ -138,19 +138,19 @@ class SubtitleScroller:
             fill_opacity=self._bg_opacity,
         )
         
-        # 强调条（左侧金色竖条，高度为文字高度的60%）
+        # 强调条（高度与底衬完全对齐，视觉重心在文字区域）
         accent = RoundedRectangle(
             width=ZC.SUBTITLE_ACCENT_WIDTH,
-            height=height * 0.6,
+            height=bg.get_height(),  # 方案C: 高度等于底衬，上下边界完全对齐
             corner_radius=ZC.SUBTITLE_ACCENT_CORNER_RADIUS,
             stroke_width=0,
             fill_color=self._accent_color,
             fill_opacity=1.0,
         )
-        # 强调条定位到底衬左侧
+        # 强调条定位到底衬左侧（水平居中于预留宽度，垂直与底衬同中心）
         accent.move_to([
-            bg.get_left()[0] + ZC.SUBTITLE_ACCENT_OFFSET_LEFT,
-            bg.get_center()[1],
+            bg.get_left()[0] + ZC.SUBTITLE_ACCENT_OFFSET_LEFT + ZC.SUBTITLE_ACCENT_WIDTH / 2,
+            bg.get_center()[1],  # 垂直中心与底衬完全一致
             0
         ])
         

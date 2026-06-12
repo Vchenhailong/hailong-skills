@@ -72,7 +72,7 @@ description: 专业的 Manim 结构化知识动画生成专家，提供企业级
 | **动画期间元素漂移** | 动画目标位置使用了相对定位              | 所有动画起止点均通过 safe_place 计算         |
 | **分辨率适配失效**   | 硬编码像素值                            | 全部使用 Manim 坐标单位（非像素）            |
 
-### 三点五、程序化布局校验（M5 的第一步 — 无需渲染）
+### 3.5、程序化布局校验（M5 的第一步 — 无需渲染）
 
 > **核心原理**：Manim 的 MObject 在 `__init__` 完成后，其几何属性（width / height / bounding_box）**立即可通过属性访问获取，无需调用 render()**。
 > 结合 `ZoneConstants` 中已定义的精确区域边界数值，所有布局问题都可以在代码层面 100% 自动检测。
@@ -164,7 +164,7 @@ description: 专业的 Manim 结构化知识动画生成专家，提供企业级
 
 | 模式名                        | 对应的语义关系                                | A 端类型匹配                              | B 端类型匹配                            | 推断逻辑                                         |
 | ----------------------------- | --------------------------------------------- | ----------------------------------------- | --------------------------------------- | ------------------------------------------------ |
-| `physics_scene_catch_all`     | **R1+R2+R3+R4 全覆盖** + 物理场景内任意图元对 | PHYSICS_GRAPHIC_TYPES (18类)              | PHYSICS_GRAPHIC_TYPES (18类)            | 物理绘图中的图元间天然存在空间关系，默认语义相关 |
+| `physics_scene_catch_all`     | **R1+R2+R3+R4 全覆盖** + 物理场景内任意图元对 | PHYSICS_GRAPHIC_TYPES (19类)              | PHYSICS_GRAPHIC_TYPES (19类)            | 物理绘图中的图元间天然存在空间关系，默认语义相关 |
 | `force_arrow_on_object`       | R1 力作用于物体                               | Arrow/Vector/DoubleArrow/CurvedArrow      | **任意**(通配)                          | 箭头类 → 推断为力矢量 → 与接触物体语义相关       |
 | `wire_to_component`           | R2 电连接                                     | Line/DashedLine/VMobject                  | **任意**(通配)                          | 连线类 → 推断为导线/场线 → 与连接目标语义相关    |
 | `object_submerged_in_liquid`  | R4 浸入流体                                   | Polygon/Rectangle/Circle/Ellipse/VMobject | Polygon(液体)                           | 固体 vs 液体Polygon → 推断为浸入关系             |
@@ -178,7 +178,7 @@ description: 专业的 Manim 结构化知识动画生成专家，提供企业级
 | `curve_annotation`            | R10 曲线标注                                  | Line/DashedLine/Arrow/Vector              | ParametricFunction/FunctionGraph/Arc... | 直线 + 曲线 → 推断为切线/法线                    |
 | `label_on_target`             | **R5 标注(通用)**                             | Tex/MathTex/Text/MarkupText               | **任意**(通配)                          | 文本类 → 推断为某对象的标注                      |
 
-> `PHYSICS_GRAPHIC_TYPES` 完整清单（18 类）：Arrow, Vector, DoubleArrow, CurvedArrow, Line, DashedLine, DottedLine, Polygon, Rectangle, Square, RegularPolygon, Circle, Ellipse, Arc, CubicBezier, Dot, SmallDot, LabeledDot, VMobject
+> `PHYSICS_GRAPHIC_TYPES` 完整清单（19 类）：Arrow, Vector, DoubleArrow, CurvedArrow, Line, DashedLine, DottedLine, Polygon, Rectangle, Square, RegularPolygon, Circle, Ellipse, Arc, CubicBezier, Dot, SmallDot, LabeledDot, VMobject
 
 **四、推荐策略（按场景选择）**
 
@@ -389,13 +389,15 @@ def validate_layout(
 
 1. **需求澄清**：根据内置知识树引导用户选择主题节点、深度、参考教材。
 2. **知识拆解**：生成知识图谱草案（JSON），包含前置知识、原子序列、来源。用户确认。
-3. **教学路径与内容设计**：按七阶段规划叙事流，设计每个原子的具体教学内容，生成教学草案，用户逐条确认。
+3. **教学路径与内容设计**：按七阶段规划叙事流，设计每个原子的具体教学内容（定义、直观解释、反直觉澄清等）。同步生成两个产物：
+   - **教学草案 Markdown**（`主题_course.md`）— 纯人类可读，无技术字段，用户逐条审核；每个原子/板块必须标注**人工制作时长估算**（单位：分钟）
+   - **课程结构 JSON**（`courses/主题_content.json`）— 机器可读，含类型/播放时长估算/动画动作等程序字段
 4. **原子拆分优化**：调用项目中的 `scripts/split_atom.py` 自动检查并拆分超长原子：
    - 元素数量 > 8 时拆分
    - 预估垂直高度 > 5.5 单位时拆分
    - 预估水平宽度 > 12 单位时拆分
    - 重要公式独立成原子
-   - 输出优化后的 JSON 教学内容文件（存放在 courses/ 目录），必须遵守 `references/json_schema.md` JSON 教学内容规范。
+   - 用户确认教学草案（Markdown）后，同步更新对应的 JSON 内容文件（存放在 courses/ 目录）。JSON 必须遵守 `references/json_schema.md` 规范。
 5. **分场规划**：若总原子数超过 30 个（或预估视频时长大于 8 分钟），自动拆分为多个场景文件，每个场景包含 15 到 30 个原子，保证独立完整性。每个场景对应独立的 JSON 和 Python 文件。
 6. **代码生成**：使用 `scripts/layout/scene_base.py` 中的 `LayoutScene` 基类，为每个场景生成独立 Python 文件，并提供可选的合并脚本（使用 ffmpeg 拼接视频和音频）。
    - **强制规范**：生成的代码必须符合「排版布局绝对遵循红线」全部要求（M1-M6 / F1-F7），使用 `LayoutScene` 基类。
@@ -425,16 +427,21 @@ def validate_layout(
 - 基于 `templates/layout_test_template.json`，用当前项目真实数据替换后生成验证场景并渲染
 - 渲染后检查：无截断/重叠/溢出、字幕滚动正常、单栏/两栏/三栏各自符合区域约束
 - **禁止**：直接使用硬编码 Python 验证场景而不基于 JSON 模板和实际数据
-- 通过标准：视觉检查无问题 -> 方可进入代码生成阶段
+- 通过标准：视觉检查（即使不具备视觉能力，也需要估算各区域和区域内容的高宽与位置）无问题 -> 方可进入代码生成阶段
 - 未通过 -> 按「红线」第四节的违规处置流程执行
 
-### 第三道：开发自检门禁（代码完成后、渲染前）
+### 第三道：程序化布局校验门禁（代码完成后、渲染前）
 
-- 执行 `references/verification_checklist.md` 中的所有检查项
-- **静态代码检查**：确保代码符合「排版布局绝对遵循红线」全部 MUST/FORBIDDEN 规则
-- **数理正确性验证**：检查坐标、几何关系、物理定律是否正确
-- 若拆分为多场景，每个场景必须独立通过自检
-- 通过标准：所有检查项通过，方可进入渲染
+> 本门禁是「程序化布局校验」原则的具体执行节点。所有布局问题在渲染前被程序化检测，无需依赖肉眼渲染。
+
+**执行要求**：
+
+- 调用 `scripts/layout/scene_base.py` 中的 `validate_layout()` 方法（9 类违规检测，详见「红线」§3.5）
+- 检查范围：区域溢出、元素重叠、字幕侵入、堆叠溢出、间距异常、填充率、重心偏移
+- 重叠判定使用「语义相关性唯一基准」—— 语义相关则通过，语义无关则报告违规
+- 支持传入 `allowed_overlap_pairs` 和 `allowed_overlap_patterns` 自定义白名单
+- 通过标准：`validate_layout()` 返回空列表（零违规），方可进入数理正确性验证
+- 未通过 -> 按「红线」违规处置流程（A/B/C 级）执行
 
 ### 第四道：数理正确性检查与验证（代码完成后、渲染前）
 
@@ -500,6 +507,9 @@ def validate_layout(
 - `scene_base.py`：`LayoutScene` 场景基类
 - `zones/`：区域容器组件（字幕区、主内容区、图形区）
   - `subtitle_zone.py`：字幕区容器（支持底部固定位置、上界约束）
+  - `main_content_zone.py`：主内容区容器（单栏/两栏/三栏布局管理）
+  - `graphics_zone.py`：图形区容器（物理图形/数学图形的 safe_place 定位）
+  - `base.py`：`ZoneBase` 基类（三个区域容器的公共实现）
 
 ### 动画组件（`scripts/animation/`）
 

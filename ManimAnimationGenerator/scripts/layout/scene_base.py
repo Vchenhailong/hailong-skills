@@ -659,11 +659,16 @@ class LayoutScene(Scene):
 
         return violations
 
-    # =================================================================
+    # ═══════════════════════════════════════════════════════════════════════════
     # 重叠白名单：预定义模式常量 + 模式匹配方法
-    # =================================================================
+    #
+    # 唯一判定基准（与 SKILL.md §重叠白名单机制 一致）：
+    #   语义相关 → 允许重叠    语义无关 → 禁止重叠（报告 ELEMENT_OVERLAP）
+    # 以下模式是"语义相关性"的近似实现：按 Manim 类型名推断语义关系。
+    # ═══════════════════════════════════════════════════════════════════════════
 
     # 物理图形类型全集（用于 physics_scene_catch_all 通配模式）
+    # 覆盖 R1(力作用) + R2(电连接) + R3(场贯穿) + R4(浸入流体) 语义关系
     PHYSICS_GRAPHIC_TYPES = (
         # 箭头/矢量
         "Arrow",
@@ -693,31 +698,32 @@ class LayoutScene(Scene):
 
     ALLOWED_PATTERNS = {
         # ════════════════════════════════════════════
-        # 物理类合法重叠模式
+        # 物理类合法重叠模式 → 对应语义关系 R1~R4
         # ════════════════════════════════════════════
-        # ★ 物理场景通配：任意两个物理图元之间的重叠全部放行
-        # 原因：物理绘图的本质就是元素间存在空间关系——
-        #   力箭头接触物体、导线连接元件、场线穿过电荷、
-        #   物体浸入液体、电磁力作用线穿过受力对象……
-        #   这些重叠不是布局错误，而是物理正确性的体现。
-        # 此模式覆盖以下所有具体物理子模式，作为第一优先级匹配。
+        # R1+R2+R3+R4 全覆盖：任意两个物理图元之间的重叠全部放行
+        # 原因：物理绘图中图元间天然存在空间关系，这些重叠不是布局错误，而是
+        # 物理正确性的体现。此模式覆盖以下所有具体物理子模式，作为第一优先级匹配。
         "physics_scene_catch_all": (
             PHYSICS_GRAPHIC_TYPES,  # A 端：任意图元
             PHYSICS_GRAPHIC_TYPES,  # B 端：任意图元（含同类）
         ),
-        # 以下为具体子模式（文档用途，已被上面的通配覆盖，保留供精确控制时使用）
+        # 以下为具体子模式（对应 R1-R4，保留供禁用通配后精确控制时使用）
+        # R1: 力作用于物体 —— 箭头类 → 与接触物体语义相关
         "force_arrow_on_object": (
             ("Arrow", "Vector", "DoubleArrow", "CurvedArrow"),
-            None,
+            None,  # 箭头 vs 任意物体（力作用）
         ),
+        # R2: 电连接 —— 连线类 → 与连接目标语义相关
         "wire_to_component": (
             ("Line", "DashedLine", "VMobject"),
-            None,
+            None,  # 导线 vs 任意元件（电连接）
         ),
+        # R11: 坐标轴刻度 —— 文本数字 + 轴线类型 → 推断为刻度标签
         "axis_tick_label": (
             ("Tex", "MathTex", "Integer", "DecimalNumber"),
             ("NumberLine", "Axes", "ThreeDAxes"),
         ),
+        # R4: 浸入流体 —— 固体 vs 液体Polygon → 推断为浸入关系
         "object_submerged_in_liquid": (
             (
                 "Polygon",
@@ -728,12 +734,12 @@ class LayoutScene(Scene):
                 "Ellipse",
                 "VMobject",
             ),
-            ("Polygon",),
+            ("Polygon",),  # 液体
         ),
         # ════════════════════════════════════════════
-        # 数学/几何类合法重叠模式
+        # 数学/几何类合法重叠模式 → 对应语义关系 R5~R11
         # ════════════════════════════════════════════
-        # 几何图形顶点与坐标点重合（三角形顶点 A/B/C 与 Dot 点）
+        # R7: 顶点标记 —— 点 + 多边形 → 推断为顶点重合
         "geometry_vertex_point": (
             ("Dot", "SmallDot", "LabeledDot"),  # 点类型
             (
@@ -749,7 +755,7 @@ class LayoutScene(Scene):
                 "VMobject",
             ),  # 几何图形类型
         ),
-        # 辅助线与主图形重叠（虚线辅助线、中线、高线等覆盖在原图形上）
+        # R6: 几何依附 —— 虚线 + 图形 → 推断为辅助线
         "auxiliary_line_on_figure": (
             ("Line", "DashedLine", "DottedLine"),
             (
@@ -764,12 +770,12 @@ class LayoutScene(Scene):
                 "VMobject",
             ),
         ),
-        # 角弧/直角符号与顶点重叠（Angle / RightAngle 标记在顶点处）
+        # R7: 角标记 —— 弧/直角符号 + 顶点 → 推断为角度标记
         "angle_mark_at_vertex": (
             ("Arc", "RightAngle", "Angle", "Elbow"),
             ("Dot", "SmallDot", "Polygon", "Triangle", "Line", "VMobject"),
         ),
-        # 顶点标签紧贴几何图形（A、B、C 等字母标签放置在顶点旁或边上）
+        # R5: 标注(几何) —— 文本 + 几何图形 → 推断为顶点/边标签
         "geometry_label_on_figure": (
             ("Tex", "MathTex", "Text"),
             (
@@ -786,17 +792,17 @@ class LayoutScene(Scene):
                 "VMobject",
             ),
         ),
-        # 垂直/平行符号与线段重叠（⊥ 或 ∥ 符号标记在线段上）
+        # R8: 符号标记 —— ⊥∥文本 + 线段 → 推断为垂直平行标记
         "perpendicular_parallel_mark": (
             ("Tex", "MathTex", "VGroup"),  # ⊥/∥ 符号通常用 Tex 或 VGroup 组合
             ("Line", "DashedLine", "Polygon", "Triangle", "VMobject"),
         ),
-        # 尺寸标注箭头与被标注线段重叠（长度/距离标注的箭头线段覆盖在被测对象上）
+        # R9: 尺寸标注 —— 箭头/大括号 + 线段 → 推断为长度标注
         "dimension_arrow_on_segment": (
             ("Arrow", "DoubleArrow", "Line", "Brace"),
             ("Line", "DashedLine", "Segment", "Polygon", "Triangle", "VMobject"),
         ),
-        # 函数图像标注与曲线重叠（曲线上的切线、法线、渐近线等）
+        # R10: 曲线标注 —— 直线 + 曲线 → 推断为切线/法线/渐近线
         "curve_annotation": (
             ("Line", "DashedLine", "Arrow", "Vector", "VMobject"),
             (
@@ -810,11 +816,10 @@ class LayoutScene(Scene):
         # ════════════════════════════════════════════
         # 通用合法重叠模式（数学+物理共用）
         # ════════════════════════════════════════════
-        # 标注文本 vs 被标注对象（标签紧贴目标，允许轻微重叠）
-        # 覆盖范围最广：任何文本型对象 vs 任何被标注目标
+        # R5: 标注(通用) —— 文本类 → 推断为某对象的标注
         "label_on_target": (
             ("Tex", "MathTex", "Text", "MarkupText"),
-            None,  # 标注文本 vs 任何被标注对象
+            None,  # 标注文本 vs 任何被标注目标
         ),
     }
 
@@ -824,7 +829,11 @@ class LayoutScene(Scene):
         obj_b: Mobject,
         patterns: dict,
     ) -> bool:
-        """检查一对对象是否匹配某个预定义的重叠豁免模式
+        """检查一对对象是否匹配某个预定义的重叠豁免模式。
+
+        唯一判定基准（与 SKILL.md §重叠白名单机制 一致）：
+            语义相关 → 允许重叠    语义无关 → 禁止重叠
+        本方法通过类型匹配推断语义相关性（按 ALLOWED_PATTERNS 中的模式定义）。
 
         Args:
             obj_a: 第一个对象
@@ -832,7 +841,7 @@ class LayoutScene(Scene):
             patterns: 模式字典，格式同 ALLOWED_PATTERNS
 
         Returns:
-            True 表示该对对象的重叠应被豁免（跳过检测）
+            True 表示该对对象的重叠应被豁免（推断为语义相关，跳过 ELEMENT_OVERLAP 检测）
         """
         type_a = type(obj_a).__name__
         type_b = type(obj_b).__name__
