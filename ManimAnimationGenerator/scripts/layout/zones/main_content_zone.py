@@ -4,9 +4,9 @@
 主内容区容器 - 根据布局模式动态调整宽度
 
 严格遵循 references/layout.md：
-- 单栏模式：X ∈ [-6.0, 6.0]，Y ∈ [-2.5, 3.0]
-- 两栏模式：X ∈ [-6.0, -0.5]，Y ∈ [-2.5, 3.0]
-- 三栏模式：主内容区为左栏+中栏，X ∈ [-6.0, 2.0]，Y ∈ [-2.5, 3.0]
+- 单栏模式：X ∈ [-6.75, 6.75]，Y ∈ [-2.5, 3.0]
+- 两栏模式：X ∈ [-6.75, 1.35]，Y ∈ [-2.5, 3.0]
+- 三栏模式：主内容区为左栏+中栏，X ∈ [-6.75, 2.35]，Y ∈ [-2.5, 3.0]
 """
 
 from manim import VGroup
@@ -16,12 +16,12 @@ from scripts.layout.constants import ZoneConstants
 
 class MainContentZone(ZoneBase):
     """主内容区容器
-    
+
     根据布局模式（单栏/两栏/三栏）动态设置边界
     三栏模式时，主内容区包含左栏（步骤说明）和中栏（公式），
     图形区由 GraphicsZone 独立管理（layout.md 第 3.6 节）
     """
-    
+
     def __init__(
         self,
         layout_mode: str = "vertical",
@@ -29,14 +29,14 @@ class MainContentZone(ZoneBase):
         **kwargs,
     ):
         """初始化主内容区容器
-        
+
         Args:
             layout_mode: 布局模式，可选 "vertical", "two_column", "three_column", "centered"
             debug: 调试模式，显示容器边框和填充
             **kwargs: 传递给 ZoneBase 的样式参数
         """
         boundaries = self._get_boundaries(layout_mode)
-        
+
         super().__init__(
             x_min=boundaries["x_min"],
             x_max=boundaries["x_max"],
@@ -45,9 +45,9 @@ class MainContentZone(ZoneBase):
             debug=debug,
             **kwargs,
         )
-        
+
         self._layout_mode = layout_mode
-    
+
     def _get_boundaries(self, mode: str) -> dict:
         """根据布局模式返回边界坐标"""
         boundaries = {
@@ -65,10 +65,10 @@ class MainContentZone(ZoneBase):
             },
             "three_column": {
                 # 三栏模式：主内容区包含左栏（步骤说明）和中栏（公式）
-                # 左栏 X ∈ [-6.0, -2.5]，中栏 X ∈ [-2.0, 2.0]
-                # 因此主内容区 X 范围取 [-6.0, 2.0]
+                # 左栏 X ∈ [-6.75, -2.2]，中栏 X ∈ [-1.7, 2.35]
+                # 因此主内容区 X 范围取 [-6.75, 2.35]
                 "x_min": ZoneConstants.THREE_COL_LEFT_X_MIN,
-                "x_max": 2.0,  # 中栏右边界
+                "x_max": ZoneConstants.THREE_COL_MID_X_MAX,  # 中栏右边界
                 "y_min": ZoneConstants.THREE_COL_Y_MIN,
                 "y_max": ZoneConstants.THREE_COL_Y_MAX,
             },
@@ -80,12 +80,14 @@ class MainContentZone(ZoneBase):
                 "y_max": ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MAX,
             },
         }
-        
+
         if mode not in boundaries:
-            raise ValueError(f"Unknown layout mode: {mode}. Must be one of {list(boundaries.keys())}")
-        
+            raise ValueError(
+                f"Unknown layout mode: {mode}. Must be one of {list(boundaries.keys())}"
+            )
+
         return boundaries[mode]
-    
+
     @property
     def layout_mode(self) -> str:
         """获取当前布局模式"""

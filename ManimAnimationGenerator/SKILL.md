@@ -376,14 +376,17 @@ def validate_layout(
 
 以下文件定义了排版的详细参数和实现方式，本红线章节是强制要求的总纲：
 
+```
 | 文件                                  | 内容                                     | 与红线的关系                                |
 | ------------------------------------- | ---------------------------------------- | ------------------------------------------- |
 | `references/layout.md`                | 区域划分、间距常量、安全边界算法         | 红线的参数来源                              |
+| `references/layout_concept.html`      | 布局可视化预览（8种场景 + 高度计算）     | AI/人类理解布局期望的参考，非代码约束       |
 | `scripts/layout/constants.py`         | 区域常量 Python 实现（精确数值）         | 程序化校验的边界数据源                      |
 | `scripts/layout/engine.py`            | 自动布局决策引擎                         | 实现 M2/M3 的工具                           |
 | `scripts/layout/scene_base.py`        | LayoutScene 基类 + **validate_layout()** | 实现 M1/M3/M5/M6 的基类 + M5 程序化校验方法 |
 | `templates/layout_test_template.json` | 布局验证模板                             | M5 第二步的输入数据                         |
 | `references/json_schema.md`           | atoms[].layout 枚举值约束                | 布局类型的合法取值                          |
+```
 
 ## 依赖与环境
 
@@ -541,15 +544,15 @@ def validate_layout(
 > **说明**：以下各领域详细违禁样例（Don't）归属到对应 reference 文件。每个 Don't 条目均包含**代码反例**和**画面崩坏结果**。
 > 负向约束（Don't）记忆强度远高于正向建议（Do），每条均为已知生产事故的根因。
 
-| 领域           | Don't 节位置                                                                                                                                              | 核心违禁                                               |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **布局排版**   | [layout.md — 附录A](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/layout.md#附录a-负向约束速查dont)                          | 硬编码坐标 / 单元素 shift / 跳过 validate_layout       |
-| **LaTeX 公式** | [math_latex.md — 10. LaTeX Don't](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/math_latex.md#10-latex-dont-违禁样例库)      | 中文入 MathTex / 公式拆分断裂 / 下标缺花括号           |
-| **物理图元**   | [physics.md — 16. 物理绘图 Don't](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/physics.md#16-物理绘图负向约束dont)          | 力矢量颜色混乱 / 导线 T 型无圆点 / 浮力物体无轮廓区分  |
-| **字幕**       | [verification_checklist.md — 字幕](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/verification_checklist.md#字幕负向约束dont) | 单条超 4 行 / 时长不同步 / 强调条未对齐底衬            |
-| **TTS**        | [tts_guide.md — 负向约束](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/tts_guide.md#负向约束dont)                           | 符号未映射 / LaTeX 分隔符未清除 / highlight_range 越界 |
-| **工作流**     | [workflow.md — 负向约束](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/workflow.md#负向约束dont)                             | 跳过 Markdown 确认 / 跳过 Gate 3 校验 / 跳过时长估算   |
-| **综合**       | [layout.md — 附录A](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/references/layout.md#附录a-负向约束速查dont)                          | 跨域混用坐标 / 未配重叠白名单 / 使用废弃路径           |
+| 领域           | Don't 节位置                                                                              | 核心违禁                                               |
+| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **布局排版**   | [layout.md — 附录A](references/layout.md#附录a-负向约束速查dont)                          | 硬编码坐标 / 单元素 shift / 跳过 validate_layout       |
+| **LaTeX 公式** | [math_latex.md — 10. LaTeX Don't](references/math_latex.md#10-latex-dont-违禁样例库)      | 中文入 MathTex / 公式拆分断裂 / 下标缺花括号           |
+| **物理图元**   | [physics.md — 16. 物理绘图 Don't](references/physics.md#16-物理绘图负向约束dont)          | 力矢量颜色混乱 / 导线 T 型无圆点 / 浮力物体无轮廓区分  |
+| **字幕**       | [verification_checklist.md — 字幕](references/verification_checklist.md#字幕负向约束dont) | 单条超 4 行 / 时长不同步 / 强调条未对齐底衬            |
+| **TTS**        | [tts_guide.md — 负向约束](references/tts_guide.md#负向约束dont)                           | 符号未映射 / LaTeX 分隔符未清除 / highlight_range 越界 |
+| **工作流**     | [workflow.md — 负向约束](references/workflow.md#负向约束dont)                             | 跳过 Markdown 确认 / 跳过 Gate 3 校验 / 跳过时长估算   |
+| **综合**       | [layout.md — 附录A](references/layout.md#附录a-负向约束速查dont)                          | 跨域混用坐标 / 未配重叠白名单 / 使用废弃路径           |
 
 > **维护规则**：当发现新的典型失败模式时，在对应 reference 文件末尾追加 Don't 条目，标注"D-新增（日期）：事故描述→代码示例→画面崩坏结果"。
 
@@ -620,6 +623,7 @@ SUBTITLE_ACCENT_COLOR = "#ffd166"  # 金色强调条
 
 - `tex_tools.py`：LaTeX 解析与符号映射（含 LaTeX→Unicode 转换引擎、P1-P6 违规检测、中文下标规范化、增强版 TTS 映射）
 - `subtitle_splitter.py`：语音文本分行
+- `subtitle_scroller.py`：字幕滚动管理器（自动处理多行字幕滚动，滚动速度与语音同步，约4字符/秒）
 - `split_atom.py`：原子拆分工具
 - `visual_actions.py`：预置视觉动作模板（可选）
 - `validate_course_contents.py`：JSON 校验与修复的便捷入口

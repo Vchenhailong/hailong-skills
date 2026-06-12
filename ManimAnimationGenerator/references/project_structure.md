@@ -10,6 +10,7 @@
 ├── .venv/
 ├── references/                         # 规范文档（只读参考，不参与运行）
 │   ├── layout.md                       # 布局安全区域规范（字幕区/主内容区/图形区坐标）
+│   ├── layout_concept.html             # 布局可视化预览（8种场景 + 高度计算）
 │   └── json_schema.md                  # 课程 JSON 结构规范（atom 类型、content 类型等）
 │
 ├── courses/                            # 课程数据（JSON 教学内容文件）
@@ -28,7 +29,7 @@
 │   │   ├── zones/                      # 区域容器组件
 │   │   │   ├── __init__.py             # 统一导出三个 Zone 类
 │   │   │   ├── base.py                 # ZoneBase 抽象基类（固定宽高、边界约束、clamp、溢出检测）
-│   │   │   ├── subtitle_zone.py        # 字幕区容器（14.0 x 1.05 单位，Y ∈ [-3.85, -2.8]）
+│   │   │   ├── subtitle_zone.py        # 字幕区容器（14.0 x 1.05 单位，Y ∈ [-3.85, -2.8]，比例规则：两区9:1，三区7:1）
 │   │   │   ├── main_content_zone.py    # 主内容区容器（单栏/两栏/三栏动态边界）
 │   │   │   └── graphics_zone.py        # 图形区容器（溢出优先缩放，防入字幕区）
 │   │   ├── engine.py                   # 布局决策引擎（根据内容数量自动选择单/两/三栏）

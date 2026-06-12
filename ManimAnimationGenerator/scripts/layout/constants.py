@@ -23,45 +23,42 @@ class ZoneConstants:
     SAFE_AREA_Y_MIN = -2.8
     SAFE_AREA_Y_MAX = 4.0
 
-    # 字幕区（适配 Manim 默认帧 frame_height=8.0，Y ∈ [-4.0, 4.0]）
-    # 18px 字幕单行高约 0.22，两行 + 间距 0.12 ≈ 0.56 单位
-    # 居中到 Y=-3.625 时：顶部≈-3.345，底部≈-3.905（安全范围内）
-    # 与主内容区底部（Y=-2.5）安全距离约 0.845 单位
-    # 容器高度 0.65 单位，刚好容纳两行字幕
-    # 容器底部 Y=-3.95，距屏幕底边（Y=-4.0）有 0.05 单位安全余量
+    # 字幕区（高度≈1.05 容纳2行 font_size=18 + 合理间距，不缩放文字）
+    # font_size=18 → 每行高约 0.23 单位，2行+间距约 0.56
+    # 容器高度 1.05 单位，底部固定于 Y=-3.85，上界不超过 Y=-2.8
     SUBTITLE_ZONE_X_MIN = -7.0
     SUBTITLE_ZONE_X_MAX = 7.0
-    SUBTITLE_ZONE_Y_MIN = -3.95
-    SUBTITLE_ZONE_Y_MAX = -3.3
-    SUBTITLE_ZONE_WIDTH = SUBTITLE_ZONE_X_MAX - SUBTITLE_ZONE_X_MIN  # 14.0
-    SUBTITLE_ZONE_HEIGHT = SUBTITLE_ZONE_Y_MAX - SUBTITLE_ZONE_Y_MIN  # 0.65
-    SUBTITLE_ZONE_CENTER_Y = (SUBTITLE_ZONE_Y_MIN + SUBTITLE_ZONE_Y_MAX) / 2  # -3.625
+    SUBTITLE_ZONE_Y_MIN = -3.85
+    SUBTITLE_ZONE_Y_MAX = -2.8
+    SUBTITLE_ZONE_WIDTH = 14.0
+    SUBTITLE_ZONE_HEIGHT = 1.05
+    SUBTITLE_ZONE_CENTER_Y = -3.325
 
-    # 主内容区（layout.md 第 3.1 节表格，两栏模式）
-    MAIN_CONTENT_TWO_COL_X_MIN = -6.0
-    MAIN_CONTENT_TWO_COL_X_MAX = -0.5
+    # 主内容区（两栏，有图形时左60%/右40%）
+    MAIN_CONTENT_TWO_COL_X_MIN = -6.75
+    MAIN_CONTENT_TWO_COL_X_MAX = 1.35
     MAIN_CONTENT_TWO_COL_Y_MIN = -2.5
     MAIN_CONTENT_TWO_COL_Y_MAX = 3.0
 
-    # 主内容区（layout.md 第 3.4 节，单栏模式）
-    MAIN_CONTENT_SINGLE_COL_X_MIN = -6.0
-    MAIN_CONTENT_SINGLE_COL_X_MAX = 6.0
+    # 主内容区（单栏，全安全区）
+    MAIN_CONTENT_SINGLE_COL_X_MIN = -6.75
+    MAIN_CONTENT_SINGLE_COL_X_MAX = 6.75
     MAIN_CONTENT_SINGLE_COL_Y_MIN = -2.5
     MAIN_CONTENT_SINGLE_COL_Y_MAX = 3.0
 
-    # 图形区（layout.md 第 3.1 节表格）
-    GRAPHICS_X_MIN = 0.5
-    GRAPHICS_X_MAX = 6.5
+    # 图形区（两栏时）
+    GRAPHICS_X_MIN = 1.85
+    GRAPHICS_X_MAX = 6.75
     GRAPHICS_Y_MIN = -2.5
     GRAPHICS_Y_MAX = 3.0
 
-    # 三栏布局（layout.md 第 3.6 节）
-    THREE_COL_LEFT_X_MIN = -6.0
-    THREE_COL_LEFT_X_MAX = -2.5
-    THREE_COL_MID_X_MIN = -2.0
-    THREE_COL_MID_X_MAX = 2.0
-    THREE_COL_RIGHT_X_MIN = 2.5
-    THREE_COL_RIGHT_X_MAX = 6.5
+    # 三栏布局（有图形时左30%/中30%/右40%）
+    THREE_COL_LEFT_X_MIN = -6.75
+    THREE_COL_LEFT_X_MAX = -2.2
+    THREE_COL_MID_X_MIN = -1.7
+    THREE_COL_MID_X_MAX = 2.35
+    THREE_COL_RIGHT_X_MIN = 2.85
+    THREE_COL_RIGHT_X_MAX = 6.75
     THREE_COL_Y_MIN = -2.5
     THREE_COL_Y_MAX = 3.0
 
@@ -79,7 +76,7 @@ class ZoneConstants:
     FONT_SIZE_MAIN_TWO_COL_LEFT = 30  # 两栏左栏（步骤/说明）
     FONT_SIZE_MAIN_TWO_COL_FORMULA = 32  # 两栏中栏（公式）
     FONT_SIZE_MAIN_TWO_COL_GRAPHICS = 28  # 两栏右栏（图形/标注）
-    FONT_SIZE_MAIN_THREE_COL_LEFT = 26  # 三栏左栏（步骤说明）
+    FONT_SIZE_MAIN_THREE_COL_LEFT = 28  # 三栏左栏（步骤说明）
     FONT_SIZE_MAIN_THREE_COL_MID = 28  # 三栏中栏（公式）
     FONT_SIZE_MAIN_THREE_COL_RIGHT = 24  # 三栏右栏（图形/标注）
     FONT_SIZE_SUBTITLE_TEXT = 24

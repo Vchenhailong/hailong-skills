@@ -30,7 +30,7 @@
 4. 自动拆分检查：
    - 检查每个原子的元素数量（> 8 则拆分）
    - 检查预估高度（> 5.5 单位则拆分）
-   - 检查预估宽度（> 12 单位则拆分）
+   - 检查预估宽度（> 13.5 单位则拆分）
    - 重要公式独立成原子
 5. 用户逐条确认教学草案。
 6. 生成 Markdown 课程文档（人类可读）：
@@ -288,7 +288,7 @@ AB != BA
 ## 负向约束（Don't）
 
 > **用途**：当工作流步骤写成这样 → 直接导致返工或事故。Agent 必须避免以下任意一条。
-> 对应 SKILL.md 中的 [负向约束速查索引](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/SKILL.md#负向约束速查索引dont-quick-reference)。
+> 对应 SKILL.md 中的 [负向约束速查索引](../SKILL.md#负向约束速查索引dont-quick-reference)。
 
 ### W-D1：跳过教学草案 Markdown 用户确认
 

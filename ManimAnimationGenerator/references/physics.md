@@ -318,6 +318,80 @@
 
 ## 15. 物理绘图图元规范（Manim 渲染范式）
 
+> ### ⚠️ 图元实现文件索引（重要）
+>
+> **真实有效的图元绘制必须使用实现文件中的工厂函数。**
+>
+> 本规范的文档示例代码仅作为规范说明，实际调用请使用 `scripts/physics_graphics.py` 中的函数。
+>
+> **实现文件索引**（对应 `scripts/physics_graphics.py` 的 `__all__`）：
+>
+> | 图元类别     | 导出名                                                            | 说明                                         |
+> | ------------ | ----------------------------------------------------------------- | -------------------------------------------- |
+> | **颜色**     | `CIRCUIT_COLORS`                                                  | 电路配色映射字典（shape.primary/highlight）  |
+> | **电路元件** | `create_battery`                                                  | 电池（IEC 60617-02 / GB/T 4728.02）          |
+> |              | `create_resistor`                                                 | 电阻（IEC 60617-04 / GB/T 4728.04 欧式矩形） |
+> |              | `create_bulb`                                                     | 灯泡（人教版教材）                           |
+> |              | `create_switch`                                                   | 开关（GB/T 4728.02）                         |
+> |              | `create_ammeter`                                                  | 电流表（人教版教材）                         |
+> |              | `create_voltmeter`                                                | 电压表（人教版教材）                         |
+> |              | `create_capacitor`                                                | 电容（IEC 60617-04 / GB/T 4728.04）          |
+> |              | `create_rheostat`                                                 | 滑动变阻器（人教版教材）                     |
+> | **尺寸常量** | `BATTERY_LONG_HALF` / `BATTERY_SHORT_HALF` / `BATTERY_GAP`        | 电池尺寸常量                                 |
+> |              | `RESISTOR_WIDTH` / `RESISTOR_HEIGHT`                              | 电阻矩形尺寸                                 |
+> |              | `BULB_RADIUS` / `SWITCH_CONTACT_GAP` / `SWITCH_DOT_RADIUS`        | 灯泡/开关常量                                |
+> |              | `METER_RADIUS` / `CAPACITOR_PLATE_LENGTH` / `CAPACITOR_PLATE_GAP` | 电表/电容常量                                |
+> |              | `RHEOSTAT_WIDTH` / `RHEOSTAT_HEIGHT`                              | 滑动变阻器尺寸                               |
+> | **基础图元** | `create_wire`                                                     | 导线段（IEC 60617 / GB/T 4728）              |
+> |              | `create_junction_dot`                                             | 节点圆点（GB/T 4728）                        |
+> |              | `create_arc_bridge`                                               | 跨线弧（GB/T 4728）                          |
+> |              | `create_force_arrow`                                              | 力矢量箭头（GB/T 4460-2013）                 |
+> | **力学图元** | `create_car`                                                      | 小车（人教版初中/高中力学）                  |
+> |              | `create_lever`                                                    | 杠杆（人教版简单机械）                       |
+> |              | `create_wall`                                                     | 墙体/刚性边界（人教版力学）                  |
+> | **流体图元** | `create_container`                                                | 容器轮廓（人教版浮力实验）                   |
+> |              | `create_liquid`                                                   | 液体填充（人教版浮力实验）                   |
+> | **组装工具** | `build_series_circuit`                                            | 构建串联回路                                 |
+> |              | `build_parallel_branch`                                           | 构建并联分支                                 |
+> | **动画函数** | `create_current_dots`                                             | 创建电流方向移动电荷点                       |
+> |              | `animate_current_flow`                                            | 播放电流流动动画                             |
+> |              | `set_switch_state`                                                | 开关状态切换动画                             |
+> |              | `set_bulb_state`                                                  | 灯泡点亮/熄灭动画                            |
+>
+> **使用示例**：
+>
+> ```python
+> from scripts.physics_graphics import (
+>     create_battery, create_resistor, create_switch,
+>     create_car, create_lever, create_wall,
+>     create_container, create_liquid,
+>     build_series_circuit, create_junction_dot, create_force_arrow,
+> )
+>
+> # 电路场景：创建串联电路
+> circuit = build_series_circuit([
+>     {"type": "battery", "params": {"voltage": "\\mathcal{E}=9\\text{V}"}},
+>     {"type": "resistor", "params": {"label": "R_1", "resistance": "100\\Omega"}},
+>     {"type": "switch", "params": {"closed": True}},
+> ])
+>
+> # 力学场景：创建小车 + 重力 + 支持力
+> car = create_car(bottom_center=[0, 0, 0], label="m=1\\text{kg}")
+> gravity = create_force_arrow(car.connection_points["center"], [0, -1, 0],
+>                               magnitude=9.8, label="\\vec{G}")
+> normal = create_force_arrow(car.connection_points["center"], [0, 1, 0],
+>                               magnitude=9.8, label="\\vec{N}")
+>
+> # 杠杆场景：创建杠杆并标注动力/阻力
+> lever = create_lever(fulcrum=[0, 0, 0], label_left="F_1", label_right="F_2")
+>
+> # 浮力场景：创建容器 + 液体
+> container_pts = [[-1, 0], [1, 0], [0.8, 2], [-0.8, 2]]
+> container = create_container(container_pts, label="液面")
+> liquid_pts = [[-0.8, 0], [0.8, 0], [0.6, 1.5], [-0.6, 1.5]]
+> liquid = create_liquid(liquid_pts, color="#4DABF7")
+> ```
+
 > **核心设计理念**：以**完整场景**为渲染单元。
 > 本规范定义每个物理图元在 Manim 代码中的标准表达方式、坐标约定和组装规则，
 > 确保生成的物理场景代码**数理正确、布局规范、动画可控**。
@@ -345,13 +419,13 @@
 
 ### 15.1 渲染范式说明
 
-| 维度     | Canvas (html-parser)               | Manim (本技能)                                     |
-| -------- | ---------------------------------- | -------------------------------------------------- |
-| 渲染粒度 | 逐图元：一根导线、一个电阻分别绘制 | **整体场景**：完整电路/受力分析作为 MObject 组合   |
-| 数据驱动 | JSON `{type, data}` → 渲染器解析   | Python 代码直接构建，使用 Manim MObject            |
-| 连接方式 | 靠坐标精确对齐 + T型连接约束       | 靠 `.next_to()` / `VGroup.arrange()` / 布局引擎    |
-| 动画能力 | 静态为主，有限过渡                 | **核心优势**：元件高亮、电流流动、力矢量生长、形变 |
-| 坐标系   | 屏幕坐标系 (Y向下) + m2s() 转换    | **数学坐标系 (Y向上)**，直接使用 axes.c2p()        |
+| 维度         | 说明                                            |
+| ------------ | ----------------------------------------------- |
+| **渲染粒度** | 整体场景：完整电路/受力分析作为 MObject 组合    |
+| **数据驱动** | Python 代码直接构建，使用 Manim MObject         |
+| **连接方式** | 靠 `.next_to()` / `VGroup.arrange()` / 布局引擎 |
+| **动画能力** | 元件高亮、电流流动、力矢量生长、形变            |
+| **坐标系**   | **数学坐标系 (Y向上)**，直接使用 `axes.c2p()`   |
 
 ### 15.2 力学图元（遵循 GB/T 4460-2013 / 人教版）
 
@@ -359,19 +433,31 @@
 
 **标准依据**：GB/T 4460-2013 第 7 章（力的表示法）/ 人教版高中物理必修一插图规范
 
-**Manim 表达方式**：`Arrow` 或 `Vector` 类
+**Manim 表达方式**：`scripts/physics_graphics.create_force_arrow()` 工厂函数
 
 ```python
-# 标准写法：从作用点出发，箭头指向力的方向
-force_arrow = Arrow(
-    start=object.get_center(),          # 作用点（质心或接触点）
-    end=object.get_center() + force_vec, # 作用点 + 力向量
-    buff=0.15,                           # 箭头头部大小（约线长的 1/5）
-    stroke_width=3,
-    color=color_map[force_name],         # 见下方颜色映射表
+# 正确方式：使用工厂函数（确保尺寸比例、颜色映射符合标准）
+from scripts.physics_graphics import create_force_arrow
+
+# 重力（自动映射红色）
+gravity = create_force_arrow(
+    origin=car.connection_points["center"],
+    direction_vector=[0, -1, 0],
+    magnitude=9.8,
+    label=r"\vec{G}",
 )
-label = MathTex(r"\vec{F}_N").next_to(force_arrow, UP, buff=0.1)
+
+# 支持力（自动映射蓝色）
+normal = create_force_arrow(
+    origin=car.connection_points["center"],
+    direction_vector=[0, 1, 0],
+    magnitude=9.8,
+    label=r"\vec{N}",
+)
 ```
+
+> ⚠️ **禁止**：在代码中直接使用 `Arrow` 手动计算起终点坐标、硬编码颜色。
+> 应始终使用 `create_force_arrow` 工厂函数，其内部自动处理方向向量归一化、长度比例尺（0.5 单位/牛顿）和颜色映射。
 
 **绘制规范（强制）**：
 
@@ -503,7 +589,11 @@ label = MathTex(r"\vec{F}_N").next_to(force_arrow, UP, buff=0.1)
 
 **Manim 表达方式**：`DashedLine` + `ArrowTip`
 
+> ⚠️ **说明**：以下为原理示意代码。实际运动轨迹应通过 `PhysicsScene` 布局引擎或场景动画逻辑生成，参考 `scripts/physics_graphics.py` 中的组装规范。
+
 ```python
+# 运动轨迹示意（原理说明，非直接调用）
+from manim import DashedLine, ArrowTip
 trajectory = DashedLine(
     start_point, end_point,
     dash_length=0.1,
@@ -548,15 +638,10 @@ direction_arrow = ArrowTip(
 
 ##### 电池 (battery) — IEC 60617-02 / GB/T 4728.02 / 人教版
 
-```python
-# IEC 60617-02: 单个电池符号为「长正短负」两平行线
-# 多节电池串联时正负极交替排列
-battery = VGroup(
-    LongLine,   # 正极长线（右侧/上方）
-    ShortLine,  # 负极短线（左侧/下方）
-)
-voltage_label = MathTex(r"\mathcal{E} = 9\,\text{V}").next_to(battery, RIGHT, buff=0.15)
-```
+**Manim 表达方式**：`scripts/physics_graphics.create_battery()` 工厂函数
+
+> ⚠️ **禁止**：在代码中直接使用 `VGroup(LongLine, ShortLine)` 手动组合。
+> 应始终使用 `create_battery(start, end, label, voltage)` 工厂函数，其内部自动处理长短线比例（长:短=2:1）、引出点计算和电压标注。
 
 | 参数     | 规范值/规则                        | 标准依据               |
 | -------- | ---------------------------------- | ---------------------- |
@@ -568,17 +653,10 @@ voltage_label = MathTex(r"\mathcal{E} = 9\,\text{V}").next_to(battery, RIGHT, bu
 
 ##### 电阻 (resistor) — IEC 60617-04 / GB/T 4728.04（欧式矩形，非 ANSI 锯齿）
 
-```python
-# IEC 60617-04 S00139: 电阻推荐矩形框（欧式）
-# ANSI Y32.2 为锯齿形——本技能默认使用欧式以对齐人教版
-resistor = Rectangle(
-    width=1.0,       # 确定值（非范围）
-    height=0.4,      # 确定值
-    color=WHITE,
-    stroke_width=2,
-)
-label = MathTex(r"R_1").move_to(resistor.get_center())
-```
+**Manim 表达方式**：`scripts/physics_graphics.create_resistor()` 工厂函数
+
+> ⚠️ **禁止**：在代码中直接使用 `Rectangle()` 手动创建。  
+> 应始终使用 `create_resistor(start, end, label)` 工厂函数，其内部自动处理矩形尺寸、标签定位和导线 T 型拆分。
 
 | 参数     | 规范值/规则                                  | 标准依据            |
 | -------- | -------------------------------------------- | ------------------- |
@@ -603,20 +681,10 @@ label = MathTex(r"R_1").move_to(resistor.get_center())
 
 ##### 灯泡 (bulb) — 人教版初中物理通用符号
 
-```python
-# 人教版教材通用：圆形外框 + 内部叉号 ×
-bulb_outer = Circle(
-    radius=0.3,       # 确定值
-    color=YELLOW_C,    # 未点亮状态
-    stroke_width=2,
-)
-bulb_cross = Cross(stroke_color=YELLOW_C, stroke_width=1.5).scale(0.5).move_to(bulb_outer.get_center())
-bulb = VGroup(bulb_outer, bulb_cross)
+**Manim 表达方式**：`scripts/physics_graphics.create_bulb()` 工厂函数
 
-# 点亮状态（符合人教版教材高亮习惯）
-lit_bulb = bulb.copy()
-lit_bulb_outer.set_fill(ORANGE, opacity=0.6)  # 橙色半透明填充
-```
+> ⚠️ **禁止**：在代码中直接使用 `Circle` + `Cross` 手动组合。
+> 应始终使用 `create_bulb(x, y, radius, label, highlighted)` 工厂函数，其内部自动处理圆形尺寸、叉号比例和点亮状态。
 
 | 参数     | 规范值/规则                            | 标准来源   |
 | -------- | -------------------------------------- | ---------- |
@@ -628,21 +696,10 @@ lit_bulb_outer.set_fill(ORANGE, opacity=0.6)  # 橙色半透明填充
 
 ##### 开关 (switch) — GB/T 4728.02 / 人教版
 
-```python
-# GB/T 4728.02 S00061: 两触点 + 可动开关臂
-contact_top = Dot(radius=0.04, color=WHITE)
-contact_bottom = Dot(radius=0.04, color=WHITE)
-contact_top.move_to([x, y_upper, 0])
-contact_bottom.move_to([x, y_lower, 0])
+**Manim 表达方式**：`scripts/physics_graphics.create_switch()` 工厂函数
 
-if closed:  # 闭合
-    switch_arm = Line(contact_top.get_center(), contact_bottom.get_center())
-else:       # 断开 —— 臂呈 45° 向右上方抬起
-    open_end = contact_bottom.get_center() + 0.3 * RIGHT + 0.3 * UP
-    switch_arm = Line(contact_top.get_center(), open_end)
-
-switch = VGroup(contact_top, contact_bottom, switch_arm)
-```
+> ⚠️ **禁止**：在代码中直接使用 `Dot` + `Line` 手动组合。
+> 应始终使用 `create_switch(x1, y1, x2, y2, closed, label)` 工厂函数，其内部自动处理触点尺寸、开合状态角度（闭合=0°，断开=45°）和状态标注。
 
 | 参数     | 规范值/规则                             | 标准来源           |
 | -------- | --------------------------------------- | ------------------ |
@@ -655,24 +712,10 @@ switch = VGroup(contact_top, contact_bottom, switch_arm)
 
 ##### 电容器 (capacitor) — IEC 60617-04 / GB/T 4728.04
 
-```python
-# IEC 60617-04 S00145: 两平行等长线段（极板）
-plate_gap = 0.5        # 极板间距（确定值，Manim 坐标单位）
-plate_length = 0.6      # 极板长度（确定值）
+**Manim 表达方式**：`scripts/physics_graphics.create_capacitor()` 工厂函数
 
-upper_plate = Line(
-    start=[center_x - plate_length/2, upper_y, 0],
-    end=[center_x + plate_length/2, upper_y, 0],
-    stroke_width=3,
-)
-lower_plate = Line(
-    start=[center_x - plate_length/2, upper_y - plate_gap, 0],
-    end=[center_x + plate_length/2, upper_y - plate_gap, 0],
-    stroke_width=3,
-)
-capacitor = VGroup(upper_plate, lower_plate)
-label = MathTex(r"C").next_to(capacitor, LEFT, buff=0.15)
-```
+> ⚠️ **禁止**：在代码中直接使用 `Line` 手动创建两平行极板。
+> 应始终使用 `create_capacitor(center_x, center_y, plate_gap, plate_length, label)` 工厂函数。
 
 **T 型接入规范（强制）** — 对齐 IEC 60617 绘制原则 / GB/T 4728 连接规则：
 
@@ -694,15 +737,10 @@ label = MathTex(r"C").next_to(capacitor, LEFT, buff=0.15)
 
 ##### 电表 (ammeter / voltmeter) — 人教版教材通用符号
 
-```python
-meter_circle = Circle(
-    radius=0.25,       # 确定值
-    color=WHITE,
-    stroke_width=2,
-)
-meter_label = Text("A" if is_ammeter else "V", font_size=24).move_to(meter_circle.get_center())
-meter = VGroup(meter_circle, meter_label)
-```
+**Manim 表达方式**：`scripts/physics_graphics.create_ammeter()` / `create_voltmeter()` 工厂函数
+
+> ⚠️ **禁止**：在代码中直接使用 `Circle` + `Text` 手动组合。
+> 应始终使用 `create_ammeter(x, y, radius, label)` / `create_voltmeter()` 工厂函数。
 
 | 元件     | 符号规范                               | 连接方式 | 标准来源   |
 | -------- | -------------------------------------- | -------- | ---------- |
@@ -712,19 +750,10 @@ meter = VGroup(meter_circle, meter_label)
 
 ##### 滑动变阻器（补充）— 人教版教材
 
-```python
-# 人教版教材：电阻矩形框 + 带箭头的滑片线
-rheostat_body = Rectangle(width=1.2, height=0.4, color=WHITE, stroke_width=2)
-slider_line = Line(
-    start=rheostat_body.get_left(),
-    end=rheostat_body.get_right(),
-    color=YELLOW_C,
-    stroke_width=2,
-)
-slider_arrow = ArrowTip(angle=0, color=YELLOW_C).move_to(slider_line.get_end())
-slider_label = MathTex(r"P").next_to(slider_arrow, UP, buff=0.1)
-rheostat = VGroup(rheostat_body, slider_line, slider_arrow, slider_label)
-```
+**Manim 表达方式**：`scripts/physics_graphics.create_rheostat()` 工厂函数
+
+> ⚠️ **禁止**：在代码中直接使用 `Rectangle` + `Line` + `ArrowTip` 手动组合。
+> 应始终使用 `create_rheostat(start, end, label)` 工厂函数。
 
 | 参数 | 规范值/规则                  | 标准来源   |
 | ---- | ---------------------------- | ---------- |
@@ -736,24 +765,23 @@ rheostat = VGroup(rheostat_body, slider_line, slider_arrow, slider_label)
 
 **核心原则**：电路以 `VGroup` 为单位组装为一个完整的 MObject。
 
+**Manim 表达方式**：`scripts/physics_graphics.build_series_circuit()` / `build_parallel_branch()` 工厂函数
+
 ```python
-def build_series_circuit(components_config):
-    """构建完整串联回路，返回 VGroup"""
-    parts = []
-    current_pos = START_POSITION
+from scripts.physics_graphics import (
+    create_battery, create_resistor, create_bulb, create_switch,
+    build_series_circuit, build_parallel_branch,
+)
 
-    for comp in components_config:
-        wire = Wire(current_pos, comp.position)
-        parts.append(wire)
-        element = create_component(comp)
-        parts.append(element)
-        current_pos = comp.output_position
-
-    closing_wire = Wire(current_pos, START_POSITION)
-    parts.append(closing_wire)
-
-    return VGroup(*parts)
+circuit = build_series_circuit([
+    {"type": "battery", "position": [0, 0, 0], "voltage": 9},
+    {"type": "resistor", "position": [3, 0, 0], "label": r"R_1"},
+    {"type": "bulb", "position": [6, 0, 0], "label": r"L_1"},
+    {"type": "switch", "position": [9, 0, 0], "closed": True},
+])
 ```
+
+> ⚠️ **禁止**：手动计算导线端点、硬编码坐标。电路组装应始终使用 `build_series_circuit` / `build_parallel_branch` 工厂函数，确保 T 型连接规范和走线一致性。
 
 **导线走线规范** — 对齐 IEC 60617 / GB/T 4728 / 人教版：
 
@@ -795,23 +823,10 @@ def build_series_circuit(components_config):
 
 **标准依据**：人教版八年级物理第十章（浮力）/ 大学物理实验教材器材绘图规范
 
-**Manim 表达方式**：`Polygon` 或多段 `Line` 组成的封闭轮廓
+**Manim 表达方式**：`scripts/physics_graphics.create_container()` 工厂函数
 
-```python
-# 示例：烧杯（梯形容器）—— 对齐人教版教材插图样式
-beaker = Polygon(
-    [left_bottom_x, bottom_y, 0],
-    [right_bottom_x, bottom_y, 0],
-    [right_top_x, top_y, 0],
-    [left_top_x, top_y, 0],
-    color=WHITE,
-    stroke_width=2.5,
-)
-# 刻度线（可选，对齐实验室量筒规范）
-for i in range(num_scale_marks):
-    y = bottom_y + (top_y - bottom_y) * i / num_scale_marks
-    tick = Line([right_bottom_x, y, 0], [right_bottom_x + 0.1, y, 0])
-```
+> ⚠️ **禁止**：在代码中直接使用 `Polygon` 手动指定顶点坐标。
+> 应始终使用 `create_container(points, label)` 工厂函数。
 
 **适用场景**：浮力实验、液体压强、连通器、量筒读数
 
@@ -819,21 +834,10 @@ for i in range(num_scale_marks):
 
 **标准依据**：人教版八年级物理 / 大学物理实验教材
 
-**Manim 表达方式**：半透明填充区域
+**Manim 表达方式**：`scripts/physics_graphics.create_liquid()` 工厂函数
 
-```python
-liquid_surface_y = container_bottom_y + fill_height  # 由物理公式计算
-
-liquid = Polygon(
-    [left_bottom_x, container_bottom_y, 0],
-    [right_bottom_x, container_bottom_y, 0],
-    [right_at_surface_x, liquid_surface_y, 0],   # 液面可能倾斜
-    [left_at_surface_x, liquid_surface_y, 0],
-    fill_color=[100, 150, 200, 0.3],  # RGBA 浅蓝半透明（水）
-    fill_opacity=0.3,
-    stroke_width=0,                     # 无边框（容器已有边框）
-)
-```
+> ⚠️ **禁止**：在代码中直接使用 `Polygon` 手动创建液体区域。
+> 应始终使用 `create_liquid(points, fill_color, fill_opacity)` 工厂函数。
 
 | 规则                                   | 标准来源       |
 | -------------------------------------- | -------------- |
@@ -845,20 +849,34 @@ liquid = Polygon(
 #### 15.4.3 浮力场景完整组装示例
 
 ```python
+from scripts.physics_graphics import (
+    create_container, create_liquid, create_force_arrow, create_car,
+)
+from scripts.physics_graphics import calculate_submerged_volume
+
 def build_buoyancy_scene(object_mass, object_volume, liquid_density):
     """构建浮力实验完整场景（遵循阿基米德原理可视化规范）"""
-    container = create_beaker(width=2.0, height=2.5)
-    displaced_volume = calculate_submerged_volume(...)
+    container = create_container(points=[(-1, 0), (1, 0), (0.8, 2.5), (-0.8, 2.5)])
+    displaced_volume = calculate_submerged_volume(object_volume, liquid_density, ...)
     liquid = create_liquid(container, fill_height=displaced_volume / container_area)
-    obj = create_object(shape="cube", size=0.8)
-    obj.move_to([container_center_x, liquid_surface_y - submerged_depth/2, 0])
 
     # 力矢量（遵循 15.2.1 颜色映射表）
-    gravity_arrow = Arrow(obj.get_center(), obj.get_center() + DOWN * G_scale, color="#EF4444")  # 红=G
-    buoyancy_arrow = Arrow(obj.get_center(), obj.get_center() + UP * Fb_scale, color="#06b6d4")   # 青=F_浮
-
-    return VGroup(container, liquid, obj, gravity_arrow, buoyancy_arrow)
+    gravity = create_force_arrow(
+        origin=obj.connection_points["center"],
+        direction_vector=[0, -1, 0],
+        magnitude=object_mass * 9.8,
+        label=r"\vec{G}",
+    )
+    buoyancy = create_force_arrow(
+        origin=obj.connection_points["center"],
+        direction_vector=[0, 1, 0],
+        magnitude=liquid_density * displaced_volume * 9.8,
+        label=r"\vec{F}_{\text{浮}}",
+    )
+    return VGroup(container, liquid, obj, gravity, buoyancy)
 ```
+
+> ⚠️ **禁止**：`VGroup` 中各子元件必须独立使用工厂函数创建后组装，禁止混用手工 `Polygon` / `Arrow` / `Circle`。
 
 ### 15.5 电磁图元（遵循 IEC / GB/T / 人教版选修三-1）
 
@@ -934,7 +952,7 @@ def build_buoyancy_scene(object_mass, object_volume, liquid_density):
 ## 16. 物理绘图负向约束（Don't）
 
 > **用途**：当物理图元代码写成这样 → 画面炸成这样。Agent 必须避免以下任意一条。
-> 对应 SKILL.md 中的 [负向约束速查索引](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/SKILL.md#负向约束速查索引dont-quick-reference)。
+> 对应 SKILL.md 中的 [负向约束速查索引](../SKILL.md#负向约束速查索引dont-quick-reference)。
 
 ### P-D1：力矢量颜色不符合力-色映射表
 
@@ -942,14 +960,13 @@ def build_buoyancy_scene(object_mass, object_volume, liquid_density):
 # ❌ DON'T：使用不符合规范的配色（与背景/其他力混淆）
 bad_arrow = Arrow(color=ORANGE)    # 橙色不在五色映射中
 
-# ✅ DO：严格遵循力-色映射表
+# ✅ DO：严格遵循力-色映射表，使用 create_force_arrow 工厂函数
+from scripts.physics_graphics import create_force_arrow
 # G=红(H0°) / f=黄(H51°) / F=绿(H142°) / N=蓝(H217°) / T=紫(H272°)
-# 力学域内最小 ΔH=51°，确保高辨识度
-gravity = Arrow(color="#EF4444")   # 红
-friction = Arrow(color="#EAB308")   # 黄
-push = Arrow(color="#22C55E")       # 绿
-normal = Arrow(color="#3B82F6")     # 蓝
-tension = Arrow(color="#A855F7")    # 紫
+# 力学域内最小 ΔH=51°，工厂函数内部自动映射正确颜色
+gravity = create_force_arrow(origin, [0, -1, 0], magnitude=9.8, label=r"\vec{G}")
+friction = create_force_arrow(origin, [0.87, -0.5, 0], magnitude=4, label=r"\vec{f}")
+normal = create_force_arrow(origin, [0, 1, 0], magnitude=9.8, label=r"\vec{N}")
 ```
 
 **画面炸成**：颜色相近无法区分受力物体，物理关系混乱
@@ -962,9 +979,13 @@ tension = Arrow(color="#A855F7")    # 紫
 # ❌ DON'T：所有力统一从物体中心引出 → 混淆作用点
 bad = Arrow(start=object.get_center(), end=...)
 
-# ✅ DO：力从接触点/作用面出发
-good = Arrow(start=object.get_corner(DL), end=...)  # 摩擦力从接触面出发
-good = Arrow(start=object.get_top(), end=...)       # 支持力从底部接触面
+# ✅ DO：力从接触点/作用面出发，使用 create_force_arrow + connection_points
+good = create_force_arrow(
+    origin=car.connection_points["bottom_center"],
+    direction_vector=[0, -1, 0],
+    magnitude=9.8,
+    label=r"\vec{G}",
+)  # 重力从底部中心出发
 ```
 
 **画面炸成**：合力方向看起来从重心发出，与物理受力分析图不符
@@ -975,12 +996,14 @@ good = Arrow(start=object.get_top(), end=...)       # 支持力从底部接触�
 
 ```python
 # ❌ DON'T：导线交叉处无圆点（L 型连接被误认为 T 型）
-# 导线1: (0,0)→(2,0)
-# 导线2: (2,0)→(2,2)
-# 导线3: (0,2)→(2,2)  ← 接入点无圆点
+# 使用 build_series_circuit 时，其内部已自动处理 T 型圆点
 
-# ✅ DO：T 型连接处加 Dot 元件（IEC 60617 标准）
-junction = Dot(point=axes.c2p(2, 0), color=WHITE, radius=0.05)
+# ✅ DO：使用 build_series_circuit / build_parallel_branch 组装电路
+from scripts.physics_graphics import build_series_circuit
+circuit = build_series_circuit([
+    {"type": "battery", "position": [0, 0, 0]},
+    {"type": "resistor", "position": [2, 0, 0], "label": r"R_1"},
+])
 ```
 
 **画面炸成**：T 型连接与 L 型连接视觉无法区分 → 回路拓扑错误
@@ -994,7 +1017,8 @@ junction = Dot(point=axes.c2p(2, 0), color=WHITE, radius=0.05)
 bad = FieldLine(start=negative_charge, end=positive_charge)
 
 # ✅ DO：电场线从正电荷出发、终止于负电荷（IEC 60617-03）
-good = FieldLine(start=positive_charge, end=negative_charge, arrows=True)
+# 电场线方向：正电荷 → 负电荷；磁感线方向：N 极 → S 极（闭合）
+# 具体实现待后续电场/磁场图元函数补全，当前先用 ParametricFunction 画线
 ```
 
 **画面炸成**：电场线方向与物理定义相反，误导学生
@@ -1008,9 +1032,11 @@ good = FieldLine(start=positive_charge, end=negative_charge, arrows=True)
 bad_object = Polygon(fill_opacity=0.4, color=BLUE)
 bad_liquid = Polygon(fill_opacity=0.4, color=BLUE)
 
-# ✅ DO：物体使用实色填充 + 描边，液体使用半透明无描边
-good_object = Polygon(fill_opacity=0.8, color=ORANGE, stroke_width=2)
-good_liquid = Polygon(fill_opacity=0.3, color=CYAN, stroke_width=0)
+# ✅ DO：分别使用 create_car / create_container / create_liquid 工厂函数
+# create_car: 实色填充 + 描边；create_liquid: 半透明无描边
+from scripts.physics_graphics import create_car, create_liquid
+obj = create_car(bottom_center=[0, 1.5, 0], label=r"m=1\,\text{kg}")
+liquid = create_liquid(container, fill_height=2.0, fill_opacity=0.3)
 ```
 
 **画面炸成**：物体淹没在液体中完全不可见
@@ -1024,7 +1050,8 @@ good_liquid = Polygon(fill_opacity=0.3, color=CYAN, stroke_width=0)
 bad = FieldLine(start=north_pole, end=arbitrary_point)
 
 # ✅ DO：磁感线必须形成闭合路径（与电场线区分）
-good = FieldLine(start=north_pole, curve_to_south_pole, closed=True)
+# 磁感线方向：N 极 → S 极 → 回到 N 极（闭合路径）
+# 具体实现待后续磁场图元函数补全，当前画闭合曲线确保回到起点
 ```
 
 **画面炸成**：与电场线混淆，物理图不符合规范
@@ -1036,11 +1063,22 @@ good = FieldLine(start=north_pole, curve_to_south_pole, closed=True)
 ```python
 # ❌ DON'T：物理量标注使用 Unicode
 bad = Text("V排", font="SimHei")
-bad = MathTex(r"V_排")               # 下划线在 LaTeX 中表示下标，需正确花括号
 
-# ✅ DO：物理量标注使用 MathTex + \text{} 包裹中文下标
-good = MathTex(r"V_{\text{排}}")     # 浮力场景排开液体体积
-good = MathTex(r"F_{\text{弹}}")     # 弹力
+# ✅ DO：所有物理标注通过 create_force_arrow / 元件工厂函数的 label 参数传入
+# 工厂函数内部使用 MathTex 渲染 LaTeX，确保下标正确（用 {} 包裹下标）
+from scripts.physics_graphics import create_force_arrow
+gravity = create_force_arrow(
+    origin=obj.connection_points["center"],
+    direction_vector=[0, -1, 0],
+    magnitude=9.8,
+    label=r"\vec{G}",           # ✅ 正确
+)
+buoyancy = create_force_arrow(
+    origin=obj.connection_points["center"],
+    direction_vector=[0, 1, 0],
+    magnitude=6,
+    label=r"F_{\text{浮}}",     # ✅ 中文下标用 \text{} 包裹
+)
 ```
 
 **画面炸成**：下标显示错误或中文字符无法编译

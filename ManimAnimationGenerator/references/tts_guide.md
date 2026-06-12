@@ -267,7 +267,7 @@ manim -pql gtts-example.py --disable_caching
 ## 负向约束（Don't）
 
 > **用途**：当 TTS 代码写成这样 → 画面/音画炸成这样。Agent 必须避免以下任意一条。
-> 对应 SKILL.md 中的 [负向约束速查索引](file:///c:/Users/chenhl/.trae-cn/skills/manimanimationgenerator/SKILL.md#负向约束速查索引dont-quick-reference)。
+> 对应 SKILL.md 中的 [负向约束速查索引](../SKILL.md#负向约束速查索引dont-quick-reference)。
 
 ### T-D1：TTS 文本未经过符号映射
 
@@ -328,6 +328,15 @@ step = {
     "tts_text": "导数的几何意义是函数图像上某一点的切线斜率",
     "duration": 5.5,             # 约 20 字 / 4字/秒 ≈ 5秒
 }
+
+# 校验规则：
+# - min_duration = ceil(len(speech) / 4)（向上取整）
+# - 若 duration < min_duration，自动修正为 min_duration
 ```
 
 **画面炸成**：字幕闪退或长时间停留，音画节奏混乱
+
+**字幕滚动同步**：
+- 语音速度：约4字符/秒
+- 滚动触发：每朗读完2行后触发一次滚动
+- 滚动时机计算：`scroll_interval = duration / (scroll_count + 1)`
