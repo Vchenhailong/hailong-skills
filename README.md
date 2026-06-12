@@ -1,0 +1,6 @@
+都是skill
+
+1. 企业级的 manim 数学内容动画制作技能。足够的灵活，适配任意AI。而且远超目前githu的各类似仓库项目、技能。（注意：物理、化学等其他学科，并没有明确涉足。可以考虑的插件或库是 manim-Chemistry、manim-physics、PyBullet 物理引擎）
+2. 基于excalidraw的原型稿绘制技能
+3. gsap 沉浸式网页交互设计技能————需要完善的是“编剧”设计
+4. http 接口测试技能。框架是Python+Pytest，为企业级应用架构和应用场景设计的http测试技能，远超AI自身水平
