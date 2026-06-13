@@ -377,15 +377,15 @@ def validate_layout(
 以下文件定义了排版的详细参数和实现方式，本红线章节是强制要求的总纲：
 
 ```
-| 文件                                  | 内容                                     | 与红线的关系                                |
-| ------------------------------------- | ---------------------------------------- | ------------------------------------------- |
-| `references/layout.md`                | 区域划分、间距常量、安全边界算法         | 红线的参数来源                              |
-| `references/layout_concept.html`      | 布局可视化预览（8种场景 + 高度计算）     | AI/人类理解布局期望的参考，非代码约束       |
-| `scripts/layout/constants.py`         | 区域常量 Python 实现（精确数值）         | 程序化校验的边界数据源                      |
-| `scripts/layout/engine.py`            | 自动布局决策引擎                         | 实现 M2/M3 的工具                           |
-| `scripts/layout/scene_base.py`        | LayoutScene 基类 + **validate_layout()** | 实现 M1/M3/M5/M6 的基类 + M5 程序化校验方法 |
-| `templates/layout_test_template.json` | 布局验证模板                             | M5 第二步的输入数据                         |
-| `references/json_schema.md`           | atoms[].layout 枚举值约束                | 布局类型的合法取值                          |
+| 文件                                  | 内容                                                                 | 与红线的关系                                |
+| ------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------- |
+| `references/layout.md`                | 区域划分、安全边界算法、**分栏布局算法（第10章强制执行）**          | 红线的参数来源 + 分栏算法规范               |
+| `references/layout_concept.html`      | 布局可视化预览（8种场景 + 动态计算算法说明）                         | AI/人类理解布局期望的参考，非代码约束       |
+| `scripts/layout/constants.py`         | **ZoneConstants.compute()** 动态计算 + **compute_column_layout()** 分栏 + **validate_column_fit()** 校验 | 程序化布局的核心方法                       |
+| `scripts/layout/engine.py`            | 自动布局决策引擎                                                    | 实现 M2/M3 的工具                           |
+| `scripts/layout/scene_base.py`        | LayoutScene 基类 + **validate_layout()**                            | 实现 M1/M3/M5/M6 的基类 + M5 程序化校验方法 |
+| `templates/layout_test_template.json` | 布局验证模板                                                        | M5 第二步的输入数据                         |
+| `references/json_schema.md`           | atoms[].layout 枚举值约束                                           | 布局类型的合法取值                          |
 ```
 
 ## 依赖与环境
@@ -510,6 +510,11 @@ def validate_layout(
 - 完整工作流程：`references/workflow.md`
 - 用户项目构建结构：`references/project_structure.md`
 - 布局规范：`references/layout.md`
+- **分栏布局递归闭环**（强制执行）：
+  - 流程：分配宽度 → 内容适配 → 计算高度 → 顶部对齐 → 检测溢出 → 必要时拆分 → 重新分配 → 直到通过
+  - 调用接口：`ZoneConstants.compute()` → `compute_column_layout()` → `validate_column_fit()`
+  - 递归上限：3 次（超过标记需人工干预）
+  - 溢出处理优先级：①缩小字号 → ②换行 → ③拆分
 - **字幕区规范**（扩展）：字体大小↔行高换算、底部固定位置、上界约束、底衬+强调条视觉设计
 - 动画规范：`references/animation.md`
 - 渲染规范：`references/rendering.md`

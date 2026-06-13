@@ -5,224 +5,568 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manim 布局概念与预期布局</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e0; padding: 30px; }
-        h1 { text-align: center; margin-bottom: 30px; color: #66DDFF; font-size: 20px; }
-        h2 { color: #FFD166; margin: 25px 0 12px; font-size: 15px; border-left: 3px solid #FFD166; padding-left: 10px; }
-        .info-box { background: rgba(102, 221, 255, 0.1); border: 1px solid #66DDFF; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 13px; line-height: 1.6; }
-        .canvas-container { display: flex; flex-direction: column; align-items: center; gap: 30px; margin-bottom: 30px; }
-        .scene { background: #1a1a24; border: 2px solid #333; border-radius: 8px; position: relative; overflow: hidden; }
-        .zone { position: absolute; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; text-align: center; color: rgba(255,255,255,0.85); }
-        .zone-title { background: rgba(102, 221, 255, 0.3); border: 1px dashed #66DDFF; color: #66DDFF; }
-        .zone-subtitle { background: rgba(255, 209, 102, 0.3); border: 1px dashed #FFD166; color: #FFD166; }
-        .zone-content { background: rgba(100, 200, 100, 0.25); border: 1px dashed #64C864; color: #8fd88f; }
-        .zone-graphic { background: rgba(200, 100, 200, 0.25); border: 1px dashed #C864C8; color: #d88fd8; }
-        .zone-subtitle-bar { background: rgba(255, 150, 100, 0.35); border: 1px solid #FF9664; color: #FF9664; }
-        .zone-empty { background: rgba(100, 100, 100, 0.2); border: 1px dashed #666; color: #888; font-style: italic; }
-        .zone-label { font-size: 9px; color: rgba(255,255,255,0.5); margin-top: 3px; }
-        .subtitle-text { font-size: 11px; color: #ccc; text-align: left; line-height: 1.5; width: 100%; }
-        .subtitle-text .line { margin: 1px 0; }
-        .subtitle-text .accent { color: #FFD166; margin-right: 5px; }
-        .scene-name { font-size: 13px; color: #888; margin-top: 8px; text-align: center; }
-        .calculation { background: rgba(100, 100, 100, 0.2); border: 1px dashed #666; border-radius: 4px; padding: 10px; margin: 5px 0; font-family: monospace; font-size: 12px; }
-        .highlight { color: #FF9664; }
+        :root {
+            --bg: #0a0e17;
+            --card: #111827;
+            --card-alt: #1a2235;
+            --border: #1e293b;
+            --text: #e2e8f0;
+            --text-muted: #64748b;
+            --accent: #f59e0b;
+            --accent-dim: #92400e;
+            --subtitle-bg: rgba(14, 24, 40, 0.85);
+            --subtitle-border: rgba(245, 158, 11, 0.3);
+            --title-bg: rgba(30, 41, 59, 0.5);
+            --content-bg: rgba(17, 24, 39, 0.3);
+            --graphics-bg: rgba(30, 41, 59, 0.3);
+            --safe-bg: rgba(16, 185, 129, 0.05);
+            --code-bg: #0d1117;
+            --highlight: #38bdf8;
+            --dim: 0.55;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.6; padding: 2rem; }
+        h1 { font-size: 1.4rem; color: var(--accent); margin-bottom: 0.3rem; font-weight: 600; }
+        .subtitle { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+        h2 { font-size: 1rem; color: var(--highlight); margin: 1.8rem 0 0.6rem; border-left: 3px solid var(--highlight); padding-left: 0.5rem; }
+        h3 { font-size: 0.85rem; color: var(--accent); margin: 1rem 0 0.4rem; }
+        p { margin: 0.3rem 0; color: var(--text-muted); font-size: 0.82rem; }
+        strong { color: var(--text); }
+        .scene-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin: 0.8rem 0; }
+        .scene-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .scene-title { background: var(--card-alt); padding: 0.5rem 0.8rem; font-size: 0.78rem; color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--border); }
+        .manim-view { position: relative; width: 100%; height: 180px; background: var(--bg); overflow: hidden; }
+        canvas { width: 100%; height: 100%; display: block; }
+        .scene-meta { padding: 0.5rem 0.8rem; font-size: 0.72rem; color: var(--text-muted); background: var(--card-alt); border-top: 1px solid var(--border); }
+        .algorithm-box { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.2rem; margin: 0.8rem 0; }
+        .algorithm-box pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.78rem; line-height: 1.8; white-space: pre-wrap; color: var(--text-muted); }
+        .algorithm-box .step { color: var(--text); }
+        .algorithm-box .comment { color: var(--text-muted); font-style: italic; }
+        .highlight { color: var(--accent); font-weight: 600; }
+        .dim { opacity: var(--dim); }
+        .table-wrapper { overflow-x: auto; margin: 0.8rem 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        th, td { padding: 0.5rem 0.8rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--highlight); background: var(--card-alt); font-weight: 600; }
+        td:first-child { color: var(--accent); font-weight: 600; white-space: nowrap; }
+        code { background: var(--code-bg); padding: 0.15rem 0.35rem; border-radius: 4px; font-family: 'SF Mono', monospace; font-size: 0.85em; color: var(--highlight); }
+        .note { background: rgba(245, 158, 11, 0.08); border: 1px solid var(--subtitle-border); border-radius: 6px; padding: 0.7rem 1rem; margin: 0.8rem 0; font-size: 0.8rem; color: var(--text-muted); }
+        .note strong { color: var(--accent); }
     </style>
 </head>
 <body>
-    <h1>Manim 布局概念与预期布局</h1>
 
-    <div class="info-box">
-        <strong>基础尺寸：</strong>屏幕 15×9 单位 | 安全区 X: -6.75~6.75, Y: -2.8~4.0<br>
-        <strong>字幕区：</strong>Y: -3.85 ~ -2.8 (高度 1.05 单位，适配 <span class="highlight">统一 font_size=18</span>，主内容区:字幕区 比例 9:1 或 标题区:主内容区:字幕区 比例 2:7:1)<br>
-        <strong>布局原则：</strong>绝大多数场景：主内容区 + 字幕区；过渡场景：仅标题（垂直居中）。主内容区分栏模式无图形时，比例优先均分，次之按内容动态调整。
+<h1>Manim 布局概念与预期布局</h1>
+<div class="subtitle">
+    标准 16:9 配置（frame_height=8, frame_width≈14.22） · 动态计算算法 · ZoneConstants.compute()
+</div>
+
+<h2>1. 动态计算算法（核心）</h2>
+
+<div class="algorithm-box">
+<pre><span class="step">总窗口</span> = (config.frame_width, config.frame_height)  <span class="comment">→ 通过属性获取</span>
+<span class="step">安全区</span> = 总窗口 - 边距比例 × 2  <span class="comment">(MARGIN_RATIO = 5%)</span>
+<span class="step">标题区高度</span> = max(安全区高 × 2/10, Text(font_size=40).height)  <span class="comment">→ 取比例与实测的较大值</span>
+<span class="step">字幕区高度</span> = max(安全区高 × 1/10, Text(font_size=18).height)  <span class="comment">→ 取比例与实测的较大值</span>
+<span class="step">内容区高度</span> = 安全区高 - 标题高 - 字幕高 - 间距
+<span class="step">各栏宽度</span> = 安全区宽 × 比例（有图形/无图形不同）
+</pre>
+</div>
+
+<div class="note">
+    <strong>调用方式：</strong>
+    <code>zones = ZoneConstants.compute(frame_width, frame_height)</code><br>
+    <code>cols = ZoneConstants.compute_column_layout(zones, num_columns=2, has_graphics=True)</code>
+</div>
+
+<h2>2. 分栏布局算法（串联流程）</h2>
+
+<div class="algorithm-box">
+<pre><span class="step">分配宽度</span> → <span class="step">内容适配（换行）</span> → <span class="step">计算高度</span> → <span class="step">顶部对齐</span> → <span class="step">检测溢出</span> → <span class="step">必要时拆分</span> → 重新分配 → 直到通过</pre>
+</div>
+
+<table>
+    <tr><th>分栏模式</th><th>有图形时</th><th>无图形时（均分）</th></tr>
+    <tr><td>两栏</td><td>左 60% / 右 40%</td><td>左 50% / 右 50%</td></tr>
+    <tr><td>三栏</td><td>左 30% / 中 30% / 右 40%</td><td>各 1/3 均分</td></tr>
+</table>
+
+<div class="note">
+    <strong>溢出处理优先级：</strong>
+    ① 缩小字号（缩到下限 80%） → ② 换行（align* 环境） → ③ 拆分（split_atom.py 按栏位拆）
+</div>
+
+<h2>3. 安全区域与字幕区高度</h2>
+
+<div class="algorithm-box">
+<pre><span class="step">标准 16:9 配置</span>：frame_height=8, frame_width≈14.22
+<span class="step">安全区</span>：X ∈ [-6.75, 6.75]，Y ∈ [-2.8, 4.0]（高 6.8 单位）
+<span class="step">字幕区</span>：Y ∈ [-3.85, -2.8]（高度 ≥ 安全区×10% ≈ 0.68 单位）
+<span class="step">标题区</span>：Y ∈ [3.11, 4.0]（高度 ≥ 安全区×20% ≈ 1.36 单位）
+
+<span class="comment">实测文字高度（Text().height）vs 比例值 → 取 max()</span>
+</pre>
+</div>
+
+<h2>4. 分栏布局可视化（8 种场景）</h2>
+
+<div class="scene-grid">
+
+    <!-- 场景1：单栏，仅主内容 -->
+    <div class="scene-card">
+        <div class="scene-title">场景1 · 单栏 + 主内容</div>
+        <div class="manim-view">
+            <canvas id="canvas1" width="400" height="180"></canvas>
+        </div>
+        <div class="scene-meta">单栏：安全区全部 · 无图形 · 无标题 · 无字幕</div>
     </div>
 
-    <!-- 情况1: 默认布局（主内容区 + 字幕区） -->
-    <h2>1. 默认布局：主内容区 + 字幕区（绝大多数场景）</h2>
-    <div class="canvas-container">
-        <div class="scene" style="width: 800px; height: 450px;">
-            <div class="zone zone-content" style="left: 100px; top: 50px; width: 600px; height: 310px;">
-                <div>主内容区（单栏/两栏/三栏）<div class="zone-label">Y: [-2.5, 2.5]</div></div>
-            </div>
-            <div class="zone zone-subtitle-bar" style="left: 50px; top: 385px; width: 700px; height: 60px;">
-                <div class="subtitle-text" style="padding-left: 35px;">
-                    <div class="line"><span class="accent">▎</span>字幕第 1 行（font_size=18）</div>
-                    <div class="line"><span class="accent">▎</span>字幕第 2 行</div>
-                </div>
-            </div>
+    <!-- 场景2：单栏 + 标题 -->
+    <div class="scene-card">
+        <div class="scene-title">场景2 · 单栏 + 标题 + 主内容</div>
+        <div class="manim-view">
+            <canvas id="canvas2" width="400" height="180"></canvas>
         </div>
-        <div class="scene-name">主内容 Y: [-2.5, 2.5] | 字幕 Y: [-3.85, -2.8] | 字幕统一 font_size=18</div>
+        <div class="scene-meta">2:8 分配 · Y ∈ [3.11, 4.0] 标题 · Y ∈ [-2.5, 3.11] 内容</div>
     </div>
 
-    <!-- 情况2: 过渡场景（仅标题，垂直居中） -->
-    <h2>2. 过渡场景：仅标题（垂直居中，Y=0）</h2>
-    <div class="canvas-container">
-        <div class="scene" style="width: 800px; height: 450px;">
-            <div class="zone zone-title" style="left: 250px; top: 180px; width: 300px; height: 60px; background: rgba(102, 221, 255, 0.5);">
-                <div>
-                    章节过渡标题
-                    <div class="zone-label">Y = 0（垂直居中）</div>
-                </div>
-            </div>
-            <div class="zone zone-subtitle-bar" style="left: 50px; top: 385px; width: 700px; height: 60px; opacity: 0.3;">
-                <div class="subtitle-text" style="padding-left: 35px; opacity: 0.5;">
-                    <div class="line"><span class="accent">▎</span>（可能无字幕）</div>
-                </div>
-            </div>
+    <!-- 场景3：单栏 + 主内容 + 字幕 -->
+    <div class="scene-card">
+        <div class="scene-title">场景3 · 单栏 + 主内容 + 字幕（9:1）</div>
+        <div class="manim-view">
+            <canvas id="canvas3" width="400" height="180"></canvas>
         </div>
-        <div class="scene-name">标题垂直居中 Y=0 | 场景时长 2-3 秒</div>
+        <div class="scene-meta">内容 : 字幕 = 9 : 1 · 字幕 Y ∈ [-3.85, -2.8]</div>
     </div>
 
-    <!-- 情况3: 单栏布局 -->
-    <h2>3. 单栏布局（主内容居中）</h2>
-    <div class="canvas-container">
-        <div class="scene" style="width: 800px; height: 450px;">
-            <div class="zone zone-content" style="left: 150px; top: 50px; width: 500px; height: 310px;">
-                <div>主内容区（单栏）<div class="zone-label">font_size=32</div></div>
-            </div>
-            <div class="zone zone-subtitle-bar" style="left: 50px; top: 385px; width: 700px; height: 60px;">
-                <div class="subtitle-text" style="padding-left: 35px;">
-                    <div class="line"><span class="accent">▎</span>字幕第 1 行</div>
-                    <div class="line"><span class="accent">▎</span>字幕第 2 行</div>
-                </div>
-            </div>
+    <!-- 场景4：单栏 + 标题 + 主内容 + 字幕 -->
+    <div class="scene-card">
+        <div class="scene-title">场景4 · 单栏 + 标题 + 主内容 + 字幕（2:7:1）</div>
+        <div class="manim-view">
+            <canvas id="canvas4" width="400" height="180"></canvas>
         </div>
-        <div class="scene-name">单栏 | 主内容 font_size=32 | 字幕统一 font_size=18</div>
+        <div class="scene-meta">2:7:1 分配 · 安全区 Y ∈ [-2.8, 4.0] · 字幕 Y ∈ [-3.85, -2.8]</div>
     </div>
 
-    <!-- 情况4: 两栏布局 -->
-    <h2>4. 两栏布局（左内容 + 右图形）</h2>
-    <div class="canvas-container">
-        <div class="scene" style="width: 800px; height: 450px;">
-            <div class="zone zone-content" style="left: 80px; top: 50px; width: 280px; height: 310px;">
-                <div style="font-size:10px;">左栏（内容）<div class="zone-label">font_size=32</div></div>
-            </div>
-            <div class="zone zone-graphic" style="left: 420px; top: 50px; width: 280px; height: 310px;">
-                <div style="font-size:10px;">右栏（图形）<div class="zone-label">font_size=28</div></div>
-            </div>
-            <div class="zone zone-subtitle-bar" style="left: 50px; top: 385px; width: 700px; height: 60px;">
-                <div class="subtitle-text" style="padding-left: 35px;">
-                    <div class="line"><span class="accent">▎</span>字幕第 1 行（统一 font_size=18）</div>
-                    <div class="line"><span class="accent">▎</span>字幕第 2 行</div>
-                </div>
-            </div>
+    <!-- 场景5：两栏（有图形） -->
+    <div class="scene-card">
+        <div class="scene-title">场景5 · 两栏 + 有图形</div>
+        <div class="manim-view">
+            <canvas id="canvas5" width="400" height="180"></canvas>
         </div>
-        <div class="scene-name">两栏 | 字幕统一 font_size=18</div>
+        <div class="scene-meta">左栏 60% / 右栏 40% · 左=步骤/公式 · 右=图形</div>
     </div>
 
-    <!-- 情况5: 三栏布局 -->
-    <h2>5. 三栏布局（步骤 + 公式 + 图形）</h2>
-    <div class="canvas-container">
-        <div class="scene" style="width: 800px; height: 450px;">
-            <div class="zone zone-content" style="left: 60px; top: 50px; width: 180px; height: 310px;">
-                <div style="font-size:10px;">左栏（步骤）<div class="zone-label">font_size=28</div></div>
-            </div>
-            <div class="zone zone-content" style="left: 280px; top: 50px; width: 200px; height: 310px;">
-                <div style="font-size:10px;">中栏（公式）<div class="zone-label">font_size=28</div></div>
-            </div>
-            <div class="zone zone-graphic" style="left: 520px; top: 50px; width: 220px; height: 310px;">
-                <div style="font-size:10px;">右栏（图形）<div class="zone-label">font_size=24</div></div>
-            </div>
-            <div class="zone zone-subtitle-bar" style="left: 50px; top: 385px; width: 700px; height: 60px;">
-                <div class="subtitle-text" style="padding-left: 35px;">
-                    <div class="line"><span class="accent">▎</span>字幕第 1 行（统一 font_size=18）</div>
-                    <div class="line"><span class="accent">▎</span>字幕第 2 行</div>
-                </div>
-            </div>
+    <!-- 场景6：两栏 + 标题 + 有图形 -->
+    <div class="scene-card">
+        <div class="scene-title">场景6 · 两栏 + 标题 + 有图形</div>
+        <div class="manim-view">
+            <canvas id="canvas6" width="400" height="180"></canvas>
         </div>
-        <div class="scene-name">三栏 | 字幕统一 font_size=18</div>
+        <div class="scene-meta">2:7:1 分配 · 两栏 Y ∈ [-2.5, 3.11] · 左 60% / 右 40%</div>
     </div>
 
-    <!-- 情况6: 字幕区比例规则 -->
-    <h2>6. 字幕区比例规则（安全区域内）</h2>
-    <div class="info-box" style="font-size: 12px;">
-        <strong>font_size → Manim 单位换算：</strong>
-        <div class="calculation">
-单行高度 = 18 × (8/72) × 1.15 ≈ <span class="highlight">0.23 单位/行</span>
+    <!-- 场景7：三栏 + 无图形 -->
+    <div class="scene-card">
+        <div class="scene-title">场景7 · 三栏 + 无图形</div>
+        <div class="manim-view">
+            <canvas id="canvas7" width="400" height="180"></canvas>
         </div>
-        <div class="calculation">
-2行 + 行间距 ≈ <span class="highlight">0.56 单位</span>
-        </div>
-        <div class="calculation">
-字幕区范围：Y ∈ [-3.85, -2.8] = <span class="highlight">高度 1.05 单位</span>（容纳 0.56 单位绰绰有余）
-        </div>
-        <div class="calculation">
-安全区 Y ∈ [-2.8, 4.0]，高 6.8 单位 → 两区模式（主内容+字幕）比例 <strong>9:1</strong>，三区模式（标题+主内容+字幕）比例 <strong>2:7:1</strong>
-        </div>
+        <div class="scene-meta">均分 1/3 · 左=概念/步骤 · 中=公式 · 右=应用/效果</div>
     </div>
 
-    <!-- 字体大小汇总 -->
-    <h2>7. 字体大小规范</h2>
-    <div class="info-box" style="font-size: 12px;">
-        <table style="width: 100%; border-collapse: collapse;">
-            <tr style="border-bottom: 1px solid #333;">
-                <th style="text-align:left;padding:5px;">元素</th>
-                <th style="text-align:left;padding:5px;">字体大小</th>
-                <th style="text-align:left;padding:5px;">说明</th>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;">标题重点</td>
-                <td style="padding:5px;">40px</td>
-                <td style="padding:5px;">视频/章节标题</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;">副标题</td>
-                <td style="padding:5px;">34px</td>
-                <td style="padding:5px;">阶段说明</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;">主内容（单栏）</td>
-                <td style="padding:5px;">32px</td>
-                <td style="padding:5px;">公式/正文</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;">主内容（三栏）</td>
-                <td style="padding:5px;">28px</td>
-                <td style="padding:5px;">各栏内容</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;color:#FF9664;">字幕（统一）</td>
-                <td style="padding:5px;color:#FF9664;">18px</td>
-                <td style="padding:5px;color:#FF9664;">不随分栏变化，底部固定 Y=-3.85</td>
-            </tr>
-        </table>
+    <!-- 场景8：三栏 + 标题 + 有图形 -->
+    <div class="scene-card">
+        <div class="scene-title">场景8 · 三栏 + 标题 + 有图形（2:7:1）</div>
+        <div class="manim-view">
+            <canvas id="canvas8" width="400" height="180"></canvas>
+        </div>
+        <div class="scene-meta">有图形时：左 30% / 中 30% / 右 40% · Y ∈ [-2.5, 3.11]</div>
     </div>
 
-    <!-- 区域汇总 -->
-    <h2>8. 区域尺寸汇总</h2>
-    <div class="info-box" style="font-size: 12px;">
-        <table style="width: 100%; border-collapse: collapse;">
-            <tr style="border-bottom: 1px solid #333;">
-                <th style="text-align:left;padding:5px;">区域</th>
-                <th style="text-align:left;padding:5px;">Y 范围</th>
-                <th style="text-align:left;padding:5px;">高度</th>
-                <th style="text-align:left;padding:5px;">字体</th>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;">安全区</td>
-                <td style="padding:5px;">[-2.8, 4.0]</td>
-                <td style="padding:5px;">6.8 单位</td>
-                <td style="padding:5px;">-</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;">主内容区</td>
-                <td style="padding:5px;">[-2.5, 2.5]</td>
-                <td style="padding:5px;">5.0 单位</td>
-                <td style="padding:5px;">32/30/28</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;color:#FF9664;">字幕区</td>
-                <td style="padding:5px;color:#FF9664;">[-3.85, -2.8]</td>
-                <td style="padding:5px;color:#FF9664;">1.05 单位</td>
-                <td style="padding:5px;color:#FF9664;">统一 18</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #222;">
-                <td style="padding:5px;">屏幕边界</td>
-                <td style="padding:5px;">[-4.5, 4.5]</td>
-                <td style="padding:5px;">9.0 单位</td>
-                <td style="padding:5px;">-</td>
-            </tr>
-        </table>
-    </div>
+</div>
+
+<script>
+(function() {
+    const TAU = Math.PI * 2;
+    const W = 400, H = 180;
+    const CX = W / 2, CY = H / 2;
+
+    // Manim 坐标到 Canvas 像素的映射
+    // Manim: X ∈ [-7.11, 7.11], Y ∈ [-4, 4]
+    // Canvas: X ∈ [0, 400], Y ∈ [0, 180]
+    function toCanvas(x, y) {
+        return {
+            x: CX + x * (W / 2 / 7.11),
+            y: CY - y * (H / 2 / 4.0)
+        };
+    }
+
+    // 绘制带标签的区域
+    function drawZone(ctx, xMin, xMax, yMin, yMax, color, label, labelColor) {
+        const p1 = toCanvas(xMin, yMax);
+        const p2 = toCanvas(xMax, yMin);
+        const w = p2.x - p1.x;
+        const h = Math.abs(p2.y - p1.y);
+
+        ctx.fillStyle = color;
+        ctx.fillRect(p1.x, p1.y, w, h);
+
+        ctx.font = '9px system-ui, sans-serif';
+        ctx.fillStyle = labelColor || '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+    }
+
+    function drawSeparator(ctx, xMin, xMax, y, dashed) {
+        const p1 = toCanvas(xMin, y);
+        const p2 = toCanvas(xMax, y);
+        ctx.beginPath();
+        ctx.setLineDash(dashed ? [3, 3] : []);
+        ctx.strokeStyle = 'rgba(100, 116, 139, 0.4)';
+        ctx.lineWidth = 0.5;
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    function drawContentText(ctx, xMin, xMax, yCenter, label, fontSize) {
+        const p1 = toCanvas(xMin, yCenter);
+        const p2 = toCanvas(xMax, yCenter);
+        const cx = (p1.x + p2.x) / 2;
+
+        ctx.font = `${fontSize || 8}px system-ui, sans-serif`;
+        ctx.fillStyle = '#94a3b8';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const lines = label.split('\n');
+        const lineH = (fontSize || 8) * 1.4;
+        const totalH = (lines.length - 1) * lineH;
+        lines.forEach((line, i) => {
+            ctx.fillText(line, cx, p1.y + totalH / 2 - i * lineH);
+        });
+    }
+
+    function drawTitleBar(ctx, xMin, xMax, yMin, yMax, label) {
+        const p1 = toCanvas(xMin, yMax);
+        const p2 = toCanvas(xMax, yMin);
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
+        ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+        ctx.font = '8px system-ui, sans-serif';
+        ctx.fillStyle = '#f59e0b';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+    }
+
+    function drawSubtitleBar(ctx, xMin, xMax, yMin, yMax) {
+        const p1 = toCanvas(xMin, yMax);
+        const p2 = toCanvas(xMax, yMin);
+        ctx.fillStyle = 'rgba(14, 24, 40, 0.85)';
+        ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.3)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+        // 左侧强调线
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.6)';
+        ctx.fillRect(p1.x, p1.y, 2, p2.y - p1.y);
+        // 字幕文字
+        ctx.font = '7px system-ui, sans-serif';
+        ctx.fillStyle = '#9ca3af';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Subtitle text...', p1.x + 8, (p1.y + p2.y) / 2);
+    }
+
+    function drawSafeArea(ctx) {
+        // 安全区域背景
+        const p1 = toCanvas(-6.75, 4.0);
+        const p2 = toCanvas(6.75, -2.8);
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.03)';
+        ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.2)';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+        ctx.setLineDash([]);
+    }
+
+    function drawScreenBoundary(ctx) {
+        const p1 = toCanvas(-7.11, 4.0);
+        const p2 = toCanvas(7.11, -4.0);
+        ctx.strokeStyle = 'rgba(100, 116, 139, 0.3)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+    }
+
+    function drawGraphIcon(ctx, xMin, xMax, yMin, yMax) {
+        const p1 = toCanvas(xMin, yMax);
+        const p2 = toCanvas(xMax, yMin);
+        const w = p2.x - p1.x;
+        const h = Math.abs(p2.y - p1.y);
+        const cx = (p1.x + p2.x) / 2;
+        const cy = (p1.y + p2.y) / 2;
+        const r = Math.min(w, h) * 0.3;
+        ctx.strokeStyle = 'rgba(96, 165, 250, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, TAU);
+        ctx.stroke();
+        // 坐标轴
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.8, cy);
+        ctx.lineTo(cx + r * 0.8, cy);
+        ctx.moveTo(cx, cy - r * 0.6);
+        ctx.lineTo(cx, cy + r * 0.6);
+        ctx.stroke();
+        // 曲线
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.7)';
+        ctx.lineWidth = 0.8;
+        ctx.moveTo(cx - r * 0.6, cy + r * 0.3);
+        ctx.quadraticCurveTo(cx, cy - r * 0.4, cx + r * 0.6, cy + r * 0.1);
+        ctx.stroke();
+    }
+
+    function drawScene1() {
+        const c = document.getElementById('canvas1');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        drawScreenBoundary(ctx);
+        drawSafeArea(ctx);
+        // 内容区 - 全安全区
+        drawZone(ctx, -6.75, 6.75, -2.5, 3.0,
+            'rgba(17, 24, 39, 0.4)', '主内容区\n(单栏)');
+        drawContentText(ctx, -6.75, 6.75, 0.25, 'MathTex / Text content');
+    }
+
+    function drawScene2() {
+        const c = document.getElementById('canvas2');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        drawScreenBoundary(ctx);
+        drawSafeArea(ctx);
+        // 标题区
+        drawTitleBar(ctx, -6.75, 6.75, 3.11, 4.0, 'Title');
+        // 内容区
+        drawZone(ctx, -6.75, 6.75, -2.5, 3.11,
+            'rgba(17, 24, 39, 0.4)', '主内容区\n(单栏)');
+        drawContentText(ctx, -6.75, 6.75, 0.3, 'MathTex / Text content');
+        drawSeparator(ctx, -6.75, 6.75, 3.11, false);
+    }
+
+    function drawScene3() {
+        const c = document.getElementById('canvas3');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        drawScreenBoundary(ctx);
+        drawSafeArea(ctx);
+        // 内容区
+        drawZone(ctx, -6.75, 6.75, -2.8, 3.0,
+            'rgba(17, 24, 39, 0.4)', '主内容区\n(9/10)');
+        drawContentText(ctx, -6.75, 6.75, 0.1, 'MathTex / Text content');
+        // 字幕区
+        drawSubtitleBar(ctx, -6.75, 6.75, -3.85, -2.8);
+        drawSeparator(ctx, -6.75, 6.75, -2.8, false);
+    }
+
+    function drawScene4() {
+        const c = document.getElementById('canvas4');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        drawScreenBoundary(ctx);
+        drawSafeArea(ctx);
+        // 标题区
+        drawTitleBar(ctx, -6.75, 6.75, 3.11, 4.0, 'Title');
+        // 内容区
+        drawZone(ctx, -6.75, 6.75, -2.8, 3.11,
+            'rgba(17, 24, 39, 0.4)', '主内容区\n(7/10)');
+        drawContentText(ctx, -6.75, 6.75, 0.15, 'MathTex / Text content');
+        // 字幕区
+        drawSubtitleBar(ctx, -6.75, 6.75, -3.85, -2.8);
+        // 分隔线
+        drawSeparator(ctx, -6.75, 6.75, 3.11, false);
+        drawSeparator(ctx, -6.75, 6.75, -2.8, false);
+    }
+
+    function drawScene5() {
+        const c = document.getElementById('canvas5');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        drawScreenBoundary(ctx);
+        drawSafeArea(ctx);
+        // 左栏 60%
+        drawZone(ctx, -6.75, 1.35, -2.5, 3.0,
+            'rgba(17, 24, 39, 0.4)', '左栏 (60%)\n步骤/公式');
+        drawContentText(ctx, -6.75, 1.35, 0.25, 'Step 1\nStep 2');
+        // 右栏 40%
+        drawZone(ctx, 1.85, 6.75, -2.5, 3.0,
+            'rgba(30, 41, 59, 0.4)', '右栏 (40%)\n图形');
+        drawGraphIcon(ctx, 1.85, 6.75, -2.5, 3.0);
+        // 分隔线
+        drawSeparator(ctx, -6.75, 6.75, 3.0, true);
+        drawSeparator(ctx, 1.35, 1.85, 3.0, false);
+    }
+
+    function drawScene6() {
+        const c = document.getElementById('canvas6');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        drawScreenBoundary(ctx);
+        drawSafeArea(ctx);
+        // 标题区
+        drawTitleBar(ctx, -6.75, 6.75, 3.11, 4.0, 'Title');
+        // 左栏
+        drawZone(ctx, -6.75, 1.35, -2.8, 3.11,
+            'rgba(17, 24, 39, 0.4)', '左栏 (60%)');
+        drawContentText(ctx, -6.75, 1.35, 0.15, 'Step 1\nStep 2');
+        // 右栏
+        drawZone(ctx, 1.85, 6.75, -2.8, 3.11,
+            'rgba(30, 41, 59, 0.4)', '右栏 (40%)');
+        drawGraphIcon(ctx, 1.85, 6.75, -2.8, 3.11);
+        // 分隔线
+        drawSeparator(ctx, -6.75, 6.75, 3.11, false);
+        drawSeparator(ctx, 1.35, 1.85, 3.11, false);
+        drawSeparator(ctx, -6.75, 6.75, -2.8, false);
+    }
+
+    function drawScene7() {
+        const c = document.getElementById('canvas7');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        drawScreenBoundary(ctx);
+        drawSafeArea(ctx);
+        // 三栏均分
+        const x1 = -6.75, x2 = -2.2, x3 = 2.35, x4 = 6.75;
+        // 左 1/3
+        drawZone(ctx, x1, x2, -2.5, 3.0,
+            'rgba(17, 24, 39, 0.4)', '左栏\n(1/3)');
+        drawContentText(ctx, x1, x2, 0.25, '概念\n步骤');
+        // 中 1/3
+        drawZone(ctx, -1.7, 2.35, -2.5, 3.0,
+            'rgba(17, 24, 39, 0.4)', '中栏\n(1/3)');
+        drawContentText(ctx, -1.7, 2.35, 0.25, '公式');
+        // 右 1/3
+        drawZone(ctx, 2.85, x4, -2.5, 3.0,
+            'rgba(30, 41, 59, 0.4)', '右栏\n(1/3)');
+        drawContentText(ctx, 2.85, x4, 0.25, '应用');
+        // 分隔线
+        drawSeparator(ctx, x1, x4, 3.0, true);
+        drawSeparator(ctx, x2, -1.7, 3.0, false);
+        drawSeparator(ctx, x3, 2.85, 3.0, false);
+    }
+
+    function drawScene8() {
+        const c = document.getElementById('canvas8');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        drawScreenBoundary(ctx);
+        drawSafeArea(ctx);
+        // 标题区
+        drawTitleBar(ctx, -6.75, 6.75, 3.11, 4.0, 'Title');
+        // 左 30%
+        drawZone(ctx, -6.75, -2.2, -2.8, 3.11,
+            'rgba(17, 24, 39, 0.4)', '左(30%)');
+        drawContentText(ctx, -6.75, -2.2, 0.15, '概念');
+        // 中 30%
+        drawZone(ctx, -1.7, 2.35, -2.8, 3.11,
+            'rgba(17, 24, 39, 0.4)', '中(30%)');
+        drawContentText(ctx, -1.7, 2.35, 0.15, '公式');
+        // 右 40%
+        drawZone(ctx, 2.85, 6.75, -2.8, 3.11,
+            'rgba(30, 41, 59, 0.4)', '右(40%)');
+        drawGraphIcon(ctx, 2.85, 6.75, -2.8, 3.11);
+        // 分隔线
+        drawSeparator(ctx, -6.75, 6.75, 3.11, false);
+        drawSeparator(ctx, -2.2, -1.7, 3.11, false);
+        drawSeparator(ctx, 2.35, 2.85, 3.11, false);
+        drawSeparator(ctx, -6.75, 6.75, -2.8, false);
+    }
+
+    drawScene1();
+    drawScene2();
+    drawScene3();
+    drawScene4();
+    drawScene5();
+    drawScene6();
+    drawScene7();
+    drawScene8();
+})();
+</script>
+
+<h2>5. 字体大小规范汇总</h2>
+
+<div class="table-wrapper">
+<table>
+    <tr>
+        <th>字体类型</th>
+        <th>字号 (px)</th>
+        <th>说明</th>
+        <th>备注</th>
+    </tr>
+    <tr>
+        <td>标题</td><td>40</td><td>主标题（章节名）</td><td>zone_creator 使用 FONT_SIZE_TITLE</td>
+    </tr>
+    <tr>
+        <td>副标题</td><td>34</td><td>副标题/小标题</td><td>zone_creator 使用 FONT_SIZE_SUBTITLE</td>
+    </tr>
+    <tr>
+        <td>单栏内容</td><td>32</td><td>单栏模式下的主内容</td><td>单栏时</td>
+    </tr>
+    <tr>
+        <td>两栏左栏</td><td>30</td><td>步骤/说明文字</td><td>两栏时有图形时</td>
+    </tr>
+    <tr>
+        <td>两栏公式</td><td>32</td><td>公式（两栏）</td><td>两栏中栏</td>
+    </tr>
+    <tr>
+        <td>两栏图形</td><td>28</td><td>图形标注文字</td><td>两栏右栏</td>
+    </tr>
+    <tr>
+        <td>三栏左/中</td><td>28</td><td>步骤说明/公式</td><td>三栏</td>
+    </tr>
+    <tr>
+        <td>三栏右</td><td>24</td><td>图形标注</td><td>三栏</td>
+    </tr>
+    <tr>
+        <td>字幕文字</td><td>18</td><td>所有分栏模式统一</td><td>统一字号，不随分栏变化</td>
+    </tr>
+</table>
+</div>
+
+<div class="note">
+    <strong>说明：</strong>
+    字体大小为参考值，实际渲染以 <code>ZoneConstants.FONT_SIZE_*</code> 常量为准。
+    文字高度通过 <code>Text(font_size=N).height</code> 动态测量，不使用经验公式（如 font_size × 8/72）。
+</div>
+
+<h2>6. 布局决策规则</h2>
+
+<table>
+    <tr><th>条件</th><th>决策</th><th>比例</th></tr>
+    <tr><td>无图形 + 无标题</td><td>单栏</td><td>安全区全宽</td></tr>
+    <tr><td>有标题 + 无图形</td><td>单栏 + 标题</td><td>标题 20% / 内容 80%</td></tr>
+    <tr><td>无图形 + 有字幕</td><td>单栏 + 字幕</td><td>内容 90% / 字幕 10%</td></tr>
+    <tr><td>有标题 + 有字幕</td><td>单栏 + 标题 + 字幕</td><td>标题 20% / 内容 70% / 字幕 10%</td></tr>
+    <tr><td>有图形 + 有标题</td><td>两栏 + 标题</td><td>左 60% / 右 40% + 标题 20%</td></tr>
+    <tr><td>有图形 + 无标题</td><td>两栏</td><td>左 60% / 右 40%</td></tr>
+    <tr><td>无图形 + 无标题 + 多概念</td><td>三栏均分</td><td>各 1/3</td></tr>
+    <tr><td>有图形 + 有标题 + 多概念</td><td>三栏 + 标题</td><td>左 30% / 中 30% / 右 40% + 标题</td></tr>
+</table>
+
 </body>
 </html>

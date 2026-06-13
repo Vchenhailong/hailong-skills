@@ -78,10 +78,10 @@ def should_split_atom(atom: Dict[str, Any]) -> Tuple[bool, str]:
     if est_height > 5.5:
         return True, f"预估垂直高度 {est_height:.1f} 超过 5.5 单位"
 
-    # 条件3：预估水平宽度超过 12 单位
+    # 条件3：预估水平宽度超过 13.5 单位
     est_width = estimate_content_width(content_list)
-    if est_width > 12.0:
-        return True, f"预估水平宽度 {est_width:.1f} 超过 12 单位"
+    if est_width > 13.5:
+        return True, f"预估水平宽度 {est_width:.1f} 超过 13.5 单位"
 
     # 条件4：包含多个独立公式（公式数量 > 2）
     formula_count = sum(1 for item in content_list if item.get("type") == "formula")
