@@ -47,7 +47,7 @@
 |------|------|------|
 | 纯数学公式（无中文） | MathTex | MathTex(r"E = mc^2") |
 | 多行对齐公式 | MathTex | MathTex(r"\begin{align*}...\end{align*}") |
-| 公式中有少量中文注释 | Tex | Tex(r"质能方程 $E=mc^2$...") |
+| 公式中有中文注释                  | Tex（必须配合 ctex 模板） | Tex(r"质能方程 $E=mc^2$...") |
 | 纯文本说明（无公式） | Text | Text("这是一个说明") |
 ```
 
@@ -58,6 +58,7 @@
 3. Tex 中的公式必须用 $...$ 包裹
 4. 多行公式优先用 MathTex + align\* 环境
 5. 禁止使用原始 LaTeX 字符串直接传给 Manim
+6. 禁止使用 Text() 渲染任何数学内容（包括变量名如 `F_1`、下标如 `v_max`、希腊字母等）。LaTeX 可渲染所有数学符号，必须统一使用 MathTex 或 Tex+ctex
 
 ### 5.4 代码示例
 

@@ -68,9 +68,8 @@
           },
           "tex_template": {
             "type": "string",
-            "enum": ["", "ctex"],
-            "default": "",
-            "description": "LaTeX 模板，ctex 支持中文混合"
+            "enum": ["ctex"],
+            "description": "LaTeX 模板：ctex（强制，用于支持中文混合内容）"
           },
           "graphics": {
             "type": "object",

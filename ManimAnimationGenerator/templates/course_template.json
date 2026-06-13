@@ -71,9 +71,8 @@
           },
           "tex_template": {
             "type": "string",
-            "enum": ["", "ctex"],
-            "default": "",
-            "description": "LaTeX 模板：空表示使用拆分渲染，ctex 表示使用 ctex 模板处理混合内容"
+            "enum": ["ctex"],
+            "description": "LaTeX 模板：ctex（强制，用于支持中文混合内容）"
           },
           "graphics": {
             "type": "object",

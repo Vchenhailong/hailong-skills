@@ -549,15 +549,15 @@ def validate_layout(
 > **说明**：以下各领域详细违禁样例（Don't）归属到对应 reference 文件。每个 Don't 条目均包含**代码反例**和**画面崩坏结果**。
 > 负向约束（Don't）记忆强度远高于正向建议（Do），每条均为已知生产事故的根因。
 
-| 领域           | Don't 节位置                                                                              | 核心违禁                                               |
-| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **布局排版**   | [layout.md — 附录A](references/layout.md#附录a-负向约束速查dont)                          | 硬编码坐标 / 单元素 shift / 跳过 validate_layout       |
-| **LaTeX 公式** | [math_latex.md — 10. LaTeX Don't](references/math_latex.md#10-latex-dont-违禁样例库)      | 中文入 MathTex / 公式拆分断裂 / 下标缺花括号           |
-| **物理图元**   | [physics.md — 16. 物理绘图 Don't](references/physics.md#16-物理绘图负向约束dont)          | 力矢量颜色混乱 / 导线 T 型无圆点 / 浮力物体无轮廓区分  |
-| **字幕**       | [verification_checklist.md — 字幕](references/verification_checklist.md#字幕负向约束dont) | 单条超 4 行 / 时长不同步 / 强调条未对齐底衬            |
-| **TTS**        | [tts_guide.md — 负向约束](references/tts_guide.md#负向约束dont)                           | 符号未映射 / LaTeX 分隔符未清除 / highlight_range 越界 |
-| **工作流**     | [workflow.md — 负向约束](references/workflow.md#负向约束dont)                             | 跳过 Markdown 确认 / 跳过 Gate 3 校验 / 跳过时长估算   |
-| **综合**       | [layout.md — 附录A](references/layout.md#附录a-负向约束速查dont)                          | 跨域混用坐标 / 未配重叠白名单 / 使用废弃路径           |
+| 领域           | Don't 节位置                                                                              | 核心违禁                                                        |
+| -------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **布局排版**   | [layout.md — 附录A](references/layout.md#附录a-负向约束速查dont)                          | 硬编码坐标 / 单元素 shift / 跳过 validate_layout                |
+| **LaTeX 公式** | [math_latex.md — 10. LaTeX Don't](references/math_latex.md#10-latex-dont-违禁样例库)      | 中文入 MathTex / 未用 ctex / Text() 渲染数学内容 / 下标缺花括号 |
+| **物理图元**   | [physics.md — 16. 物理绘图 Don't](references/physics.md#16-物理绘图负向约束dont)          | 力矢量颜色混乱 / 导线 T 型无圆点 / 浮力物体无轮廓区分           |
+| **字幕**       | [verification_checklist.md — 字幕](references/verification_checklist.md#字幕负向约束dont) | 单条超 4 行 / 时长不同步 / 强调条未对齐底衬                     |
+| **TTS**        | [tts_guide.md — 负向约束](references/tts_guide.md#负向约束dont)                           | 符号未映射 / LaTeX 分隔符未清除 / highlight_range 越界          |
+| **工作流**     | [workflow.md — 负向约束](references/workflow.md#负向约束dont)                             | 跳过 Markdown 确认 / 跳过 Gate 3 校验 / 跳过时长估算            |
+| **综合**       | [layout.md — 附录A](references/layout.md#附录a-负向约束速查dont)                          | 跨域混用坐标 / 未配重叠白名单 / 使用废弃路径                    |
 
 > **维护规则**：当发现新的典型失败模式时，在对应 reference 文件末尾追加 Don't 条目，标注"D-新增（日期）：事故描述→代码示例→画面崩坏结果"。
 

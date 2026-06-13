@@ -4,9 +4,10 @@
 
 代码生成阶段（工作流阶段三）**必须**从阶段二输出的 JSON 教学内容文件中读取数据，**禁止** AI 自行重写或解释教学内容。
 
-JSON 文件路径示例：courses/主题_content.json
+JSON 文件路径示例：courses/主题\_content.json
 
 读取方式：
+
 ```python
 import json
 with open("courses/matrix_content.json", "r", encoding="utf-8") as f:
@@ -63,6 +64,7 @@ for atom in content_data["atoms"]:
 ```
 
 **注意事项**：
+
 - 每个教学路径应至少包含 definition、intuition、operation、counter_intuitive、application、summary 各至少一个
 - counter_intuitive 类型的原子必须包含证伪步骤（先展示错误，再展示正确）
 - 若某概念无常见反直觉点，可省略 counter_intuitive，但需在注释中说明
@@ -75,6 +77,7 @@ for atom in content_data["atoms"]:
 | text | string | 是 | 要显示的文本内容，对于 formula 类型为 LaTeX 表达式 |
 | type | string | 是 | 内容类型：highlight / content / formula / mixed |
 ```
+
 注：mixed 类型仅在 tex_template 为 "ctex" 时使用，表示中文与公式混合在同一个字符串中。
 
 ### 2.4 类型定义与渲染规则
@@ -89,27 +92,27 @@ for atom in content_data["atoms"]:
 ```
 
 **类型映射规则**（兼容旧格式）：
+
 - type: "text" -> 自动映射为 content
 - type: "title" -> 自动映射为 highlight
 
 **禁止行为**：
+
 - 禁止使用 type: "text" 标记公式（应使用 formula）
 - 禁止使用 type: "title" 标记普通文本（应使用 content 或 highlight）
 - 禁止在 formula 中包含中文字符
 - 禁止在 formula 中使用 Tex()（统一使用 MathTex()）
 
-### 2.4.1 中英文混合的两种处理方式
+### 2.4.1 中英文混合的处理方式（强制）
 
-**方式一：拆分（默认，推荐）**
-- 中文用 Text，公式用 MathTex，拆分为多个元素
-- 适用场景：短文本 + 少量公式
+**强制要求**：包含中文的 LaTeX 内容**必须**使用 ctex 模板，不得拆分。
 
-**方式二：ctex 模板（备选）**
-- 使用 Tex + ctex 模板，中文和公式写在一起
-- 适用场景：长文本 + 公式密集，或用户明确要求不拆分
+- 使用 Tex + ctex 模板，中文和公式写在同一个字符串中
+- JSON 中必须声明 `tex_template: "ctex"`
 - 环境要求：已安装 ctex 宏包，使用 xelatex 编译器
 
-JSON 中声明 tex_template 字段：
+JSON 示例：
+
 ```
 {
   "id": "mixed_formula",
@@ -121,10 +124,6 @@ JSON 中声明 tex_template 字段：
 }
 ```
 
-选择优先级：
-1. 默认使用方式一：拆分
-2. 当拆分后元素过多（> 6 个）或用户明确要求时，使用方式二：ctex 模板
-
 ### 2.5 formula 类型的特殊处理
 
 **核心原则**：formula 类型中禁止包含中文字符。
@@ -132,21 +131,22 @@ JSON 中声明 tex_template 字段：
 当 type 为 formula 时，AI 必须：
 
 1. **检查是否包含中文**：
-   - 若 text 字段中包含中文字符（匹配正则 `[\u4e00-\u9fff]`），则 **必须报错**，提示用户将中文部分拆分为独立的 content 或 highlight 类型
-   - 正确做法：将中文和公式拆分为多个 content 元素
-   - 错误做法：{"text": "矩阵 a_{ij} 表示第 i 行第 j 列的元素", "type": "formula"}
+   - 若 text 字段中包含中文字符（匹配正则 `[\u4e00-\u9fff]`），**必须报错**，提示使用 mixed 类型 + `tex_template: "ctex"`
+   - 正确做法：使用 mixed 类型并指定 `"tex_template": "ctex"`
+   - 错误做法：`{"text": "矩阵 a_{ij} 表示第 $i$ 行", "type": "formula"}`
 
 2. **拆分示例**：
 
 输入（错误）：
-{"text": "矩阵 a_{ij} 表示第 i 行第 j 列的元素", "type": "formula"}
+{"text": "矩阵 a\_{ij} 表示第 i 行第 j 列的元素", "type": "formula"}
 
 输出（正确）：
+
 ```json
 [
-  {"text": "矩阵 ", "type": "content"},
-  {"text": "a_{ij}", "type": "formula"},
-  {"text": " 表示第 i 行第 j 列的元素", "type": "content"}
+  { "text": "矩阵 ", "type": "content" },
+  { "text": "a_{ij}", "type": "formula" },
+  { "text": " 表示第 i 行第 j 列的元素", "type": "content" }
 ]
 ```
 
@@ -157,7 +157,7 @@ JSON 中声明 tex_template 字段：
    - 禁止使用 \text{} 包裹中文（应直接拆分）
 
 4. **长公式处理**：
-   - 预估宽度 > 13.5 单位时，自动拆分为多行（使用 align* 环境）
+   - 预估宽度 > 13.5 单位时，自动拆分为多行（使用 align\* 环境）
 
 5. **纯公式渲染**：
    - 确认无中文后，使用 MathTex(r"text") 渲染（不使用 Tex）
@@ -169,14 +169,18 @@ JSON 中声明 tex_template 字段：
 ```json
 {
   "content": [
-    {"text": "等比例缩放", "type": "highlight"},
-    {"text": "：信息完整保留", "type": "content"},
-    {"text": "\\begin{pmatrix} 2 & 0 \\\\ 0 & 2 \\end{pmatrix}", "type": "formula"}
+    { "text": "等比例缩放", "type": "highlight" },
+    { "text": "：信息完整保留", "type": "content" },
+    {
+      "text": "\\begin{pmatrix} 2 & 0 \\\\ 0 & 2 \\end{pmatrix}",
+      "type": "formula"
+    }
   ]
 }
 ```
 
 渲染代码：
+
 ```python
 def has_chinese(text):
     import re
@@ -205,8 +209,8 @@ group = VGroup(*items).arrange(DOWN, buff=0.4, center=True)
 ## 3. 文件组织
 
 - 所有 JSON 教学内容文件放在 `courses/` 目录下
-- 命名规则：主题_content.json（如 matrix_content.json）
-- 分场时：主题_序号_content.json（如 matrix_01_content.json）
+- 命名规则：主题\_content.json（如 matrix_content.json）
+- 分场时：主题\_序号\_content.json（如 matrix_01_content.json）
 
 ## 4. 验证清单
 
