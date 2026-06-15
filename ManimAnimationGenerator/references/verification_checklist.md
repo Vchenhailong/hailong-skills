@@ -250,6 +250,100 @@ violations = self.validate_layout(
 - [ ] 回路完整（无断路/短路/孤岛）
 - [ ] ⊙/⊗ 标注垂直纸面方向（电流/磁感线方向）
 - [ ] 电流表/电压表已正确接入电路（串联/并联）
+- [ ] **电路图已执行数理验证**（二选一）：
+  - [ ] 方案 A（推荐）：数理验证通过
+    - [ ] 导线连通性验证：从电源正极出发遍历所有元件，距离 < 0.01 视为连通
+    - [ ] 节点等电势验证：并联支路接入点坐标一致性检查
+    - [ ] T 型连接识别：三条导线交汇点坐标重合性验证
+  - [ ] 方案 B（fallback）：规范校验通过
+    - [ ] 电源正负极标识完整（"+"/"-" 可见）
+    - [ ] 导线直角走线（角度为 0°/90°/180°/270°）
+    - [ ] 所有元件 `connection_points` 属性存在
+    - [ ] 无悬空端点（所有导线终点连接元件或节点）
+    - [ ] 无零长度线段
+
+### 电路图元 Don't（负向约束）
+
+> **用途**：电路图代码写成这样 → 画面炸成这样。Agent 必须避免以下任意一条。
+
+#### C-D1：导线 T 型连接处无节点圆点
+
+```python
+# ❌ DON'T：三条导线交汇但未画圆点，视觉上无法区分 T 型与 L 型连接
+# 导致回路拓扑错误
+
+# ✅ DO：使用 create_junction_dot() 标注
+junction = create_junction_dot(center=[0, 1, 0])
+parts.add(junction)
+```
+
+**画面炸成**：学生无法判断导线是否真正连接，电路逻辑混乱
+
+---
+
+#### C-D2：导线斜线转弯或斜向连接
+
+```python
+# ❌ DON'T：导线同时存在 X 和 Y 方向偏移
+bad_wire = Line(start=[0, 0, 0], end=[1, 1, 0])  # 斜线！
+
+# ✅ DO：导线必须横平竖直
+good_wire = create_wire(start=[0, 0, 0], end=[1, 0, 0])
+good_wire2 = create_wire(start=[1, 0, 0], end=[1, 1, 0])
+```
+
+**画面炸成**：不符合 IEC 标准，视觉混乱
+
+---
+
+#### C-D3：元件缺少 connection_points 属性
+
+```python
+# ❌ DON'T：手动创建的元件未添加 connection_points
+bad_resistor = Rectangle()  # 无连接点定义
+
+# ✅ DO：始终使用工厂函数创建元件
+good_resistor = create_resistor(
+    start=[0, 0, 0], end=[1, 0, 0], label=r"R_1"
+)
+# 内部自动设置 connection_points = {"start": ..., "end": ...}
+```
+
+**画面炸成**：无法自动连接，导线端点需要手动计算，容易出错
+
+---
+
+#### C-D4：回路未闭合或存在悬空端点
+
+```python
+# ❌ DON'T：导线终点未连接任何元件，形成悬空
+bad_circuit = VGroup(
+    battery,
+    Line(battery.connection_points["end"], [2, 0, 0])  # 悬空端点！
+)
+
+# ✅ DO：确保所有导线都形成闭合回路
+good_circuit = build_series_circuit([...])  # 自动闭合
+```
+
+**画面炸成**：电路断路，电流无法流通
+
+---
+
+#### C-D5：电源正负极标识缺失
+
+```python
+# ❌ DON'T：电池符号缺少 "+" / "-" 标记
+bad_battery = VGroup(LongLine, ShortLine)  # 无极性标识
+
+# ✅ DO：使用 create_battery() 工厂函数，自动添加极性标记
+good_battery = create_battery(
+    start=[0, 0, 0], end=[0, 1, 0], voltage=r"\mathcal{E}=9\text{V}"
+)
+# 内部自动包含 plus_sign (+) 和 minus_sign (-)
+```
+
+**画面炸成**：无法区分正负极，违反 IEC 60617-02 强制要求
 
 ### 电磁图元
 

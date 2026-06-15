@@ -68,16 +68,15 @@ class ZoneConstants:
     # ============================================================
     # 字幕样式
     # ============================================================
-    SUBTITLE_SCROLL_DURATION = 0.4
+    SUBTITLE_SCROLL_DURATION = 0.4  # 单次滚动动画过渡时长（秒），仅控制动画平滑度
+    SUBTITLE_SPEECH_SPEED = 4.0     # 语音朗读速度（字符/秒），用于计算每行显示时间
+                                    # 每行显示时间 = 行字符数 / SPEECH_SPEED
+                                    # 例：20字符行 → 20/4 = 5秒显示时间
     SUBTITLE_BACKGROUND_COLOR = "#0e1828"
     SUBTITLE_BACKGROUND_OPACITY = 0.72
     SUBTITLE_BACKGROUND_PADDING_W = 0.4
     SUBTITLE_BACKGROUND_PADDING_H = 0.2
     SUBTITLE_BACKGROUND_CORNER_RADIUS = 0.14
-    SUBTITLE_ACCENT_COLOR = "#ffd166"
-    SUBTITLE_ACCENT_WIDTH = 0.09
-    SUBTITLE_ACCENT_CORNER_RADIUS = 0.04
-    SUBTITLE_ACCENT_OFFSET_LEFT = 0.18
     SUBTITLE_TEXT_COLOR = "#CCCCCC"
     SUBTITLE_BACKGROUND_TO_TEXT_MARGIN = 0.1
 
@@ -88,13 +87,123 @@ class ZoneConstants:
     SUBTITLE_ZONE_TOP_Y = (
         -2.8
     )  # 字幕区上界（防止侵入主内容区，与 SUBTITLE_ZONE_Y_MAX 一致）
+    SUBTITLE_ZONE_X_MIN = (
+        -6.75
+    )  # 字幕区左边界（与安全区左边界一致，确保底衬不越界）
+    SUBTITLE_ZONE_X_MAX = (
+        6.75
+    )  # 字幕区右边界（与安全区右边界一致，确保底衬不越界）
     SUBTITLE_LINE_SPACING_RATIO = 0.6  # 字幕行间距系数（相对于 font_size）
+    SUBTITLE_LINE_HEIGHT_RATIO = 1.4  # 字幕行高系数（font_size → 实际行高的倍率）
     MANIM_FONT_TO_UNIT_RATIO = (
         8.0 / 72.0
     )  # 字体大小到 Manim 单位的换算系数（已废弃，仅兼容旧代码）
 
     # 兼容性别名
     SUBTITLE_FONT_SIZE = FONT_SIZE_SUBTITLE_TEXT  # 兼容旧代码
+
+    # ============================================================
+    # 字体自适应算法
+    # ============================================================
+
+    @classmethod
+    def auto_font_size(
+        cls,
+        content_width: float,
+        available_width: float,
+        base_size: int = 32,
+        min_size: int = 24,
+        max_size: int = 34,
+    ) -> int:
+        """根据可用宽度自动计算合适的字体大小
+
+        算法：
+        1. 计算宽度比例：ratio = available_width / content_width
+        2. 目标字号：target_size = base_size × ratio
+        3. 限制范围：clamp(target_size, min_size, max_size)
+
+        Args:
+            content_width: 内容当前宽度（Manim 单位）
+            available_width: 可用宽度（栏位宽度）
+            base_size: 基准字号（默认 32px）
+            min_size: 最小字号（默认 24px）
+            max_size: 最大字号（默认 34px）
+
+        Returns:
+            推荐的字号（int）
+
+        示例::
+
+            # 单栏模式：内容宽 10.0，可用宽 13.5
+            font_size = ZoneConstants.auto_font_size(10.0, 13.5)  # → 32 (无需缩小)
+
+            # 内容宽 15.0，可用宽 13.5
+            font_size = ZoneConstants.auto_font_size(15.0, 13.5)  # → 28 (缩放 0.9)
+
+            # 内容宽 20.0，可用宽 13.5
+            font_size = ZoneConstants.auto_font_size(20.0, 13.5)  # → 24 (触及下限)
+        """
+        if content_width <= 0 or available_width <= 0:
+            return base_size
+
+        ratio = available_width / content_width
+        target_size = int(base_size * ratio)
+
+        # 限制在允许范围内
+        return max(min_size, min(max_size, target_size))
+
+    @classmethod
+    def estimate_text_width(cls, text: str, font_size: int) -> float:
+        """预估文本宽度（无需创建 Mobject）
+
+        基于经验公式：每字符约 0.6 单位（font_size=32 时）
+
+        Args:
+            text: 文本内容
+            font_size: 字体大小
+
+        Returns:
+            预估宽度（Manim 单位）
+        """
+        if not text:
+            return 0.0
+
+        # 基准：font_size=32 时，每字符约 0.6 单位
+        chars_per_unit = 1 / 0.6
+        scale_factor = font_size / 32.0
+        estimated_width = len(text) / chars_per_unit * scale_factor
+
+        return estimated_width
+
+    @classmethod
+    def estimate_formula_width(cls, tex_string: str, font_size: int) -> float:
+        """预估公式宽度（基于 LaTeX 长度）
+
+        经验公式：
+        - 简单公式：宽度 ≈ 字符数 × 0.55
+        - 复杂公式（含矩阵/分式）：宽度 ≈ 字符数 × 0.7
+
+        Args:
+            tex_string: LaTeX 公式字符串
+            font_size: 字体大小
+
+        Returns:
+            预估宽度（Manim 单位）
+        """
+        if not tex_string:
+            return 0.0
+
+        # 检测复杂结构
+        is_complex = any(
+            cmd in tex_string
+            for cmd in ["\\begin{bmatrix}", "\\frac", "\\int", "\\sum", "\\begin{pmatrix}"]
+        )
+
+        char_width = 0.7 if is_complex else 0.55
+        scale_factor = font_size / 32.0
+        estimated_width = len(tex_string) * char_width * scale_factor * 0.1
+
+        return estimated_width
 
     # ============================================================
     # 静态常量（标准 16:9 配置的计算结果，作为默认值和文档参考）

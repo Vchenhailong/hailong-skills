@@ -68,6 +68,35 @@ class LayoutEngine:
     """
 
     @staticmethod
+    def measure_content_dims(mobjs: list) -> Tuple[float, float]:
+        """实时测量内容对象的实际宽高
+
+        使用 Manim Mobject 的 .width 和 .height 属性实时获取实际尺寸，
+        替代静态预估，确保布局决策基于精确数据。
+
+        Args:
+            mobjs: 要测量的 Mobject 列表
+
+        Returns:
+            (total_width, total_height): 内容的总宽度和总高度
+            - 对于垂直排列：total_height = Σ 各元素高度 + (n-1) × buff
+            - 对于水平排列：total_width = Σ 各元素宽度 + (n-1) × buff
+            - 实际返回的是包围盒尺寸（VGroup 的 width/height）
+
+        示例::
+
+            # 创建内容
+            texts = [Text(f"Line {i}") for i in range(3)]
+            width, height = LayoutEngine.measure_content_dims(texts)
+            print(f"内容宽 {width:.2f}, 高 {height:.2f}")
+        """
+        if not mobjs:
+            return 0.0, 0.0
+
+        temp_group = VGroup(*mobjs)
+        return temp_group.width, temp_group.height
+
+    @staticmethod
     def decide(
         content_count: int,
         has_graphics: bool,
@@ -126,7 +155,7 @@ class LayoutEngine:
                     error_message=(
                         f"内容预估高度 {estimated_height:.1f} 单位 > {ZoneConstants.VERTICAL_OVERFLOW_THRESHOLD} 单位，"
                         f"宽度 {estimated_width:.1f} 单位 > {ZoneConstants.HORIZONTAL_OVERFLOW_THRESHOLD} 单位。"
-                        f"建议: 将该原子拆分为 2-3 个独立原子"
+                        f"建议: 将该原子拆分为更细粒度的原子"
                     ),
                 )
 

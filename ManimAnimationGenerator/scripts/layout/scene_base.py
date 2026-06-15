@@ -13,12 +13,14 @@ LayoutScene 场景基类 - 聚合所有布局组件
 
 from manim import Scene, VGroup, Mobject, DOWN, LEFT, RIGHT, UP, ORIGIN
 from typing import List, Dict, Any, Optional, Union
+import logging
 
 from scripts.layout.constants import ZoneConstants
 from scripts.layout.zones.subtitle_zone import SubtitleZone
 from scripts.layout.zones.main_content_zone import MainContentZone
 from scripts.layout.zones.graphics_zone import GraphicsZone
 from scripts.layout.engine import LayoutEngine, LayoutMode, LayoutDecision
+from scripts.layout.optimizer import LayoutOptimizer, OptimizationResult
 
 
 class LayoutScene(Scene):
@@ -31,6 +33,7 @@ class LayoutScene(Scene):
         self._main_content_zone: Optional[MainContentZone] = None
         self._graphics_zone: Optional[GraphicsZone] = None
         self._layout_engine = LayoutEngine()
+        self._layout_optimizer = LayoutOptimizer(on_split_callback=self._on_atom_split)
         self.speech_service = None
         # 跟踪当前显示的字幕对象，便于跨场景清理
         self._current_subtitle_mobjs: List[Mobject] = []
@@ -121,6 +124,10 @@ class LayoutScene(Scene):
     ) -> VGroup:
         """两栏布局：左内容区 + 右图形区
 
+        内置**事前预检 + 事后校验**双层防护：
+        1. **事前预检**（放置前）：逐对象测量宽度/高度，超限时自动缩放或换行
+        2. **事后校验**（放置后）：validate_layout() 检测溢出，触发降级链
+
         Args:
             left_content: 左栏内容（公式/文字）
             right_content: 右栏图形
@@ -128,19 +135,59 @@ class LayoutScene(Scene):
         Returns:
             包含两栏的 VGroup
         """
-        left_group = self.place_in_main_zone(left_content, layout_mode="two_column")
-        right_group = self.place_graphics(right_content)
+        # ── 事前预检：获取各栏可用尺寸 ──
+        left_zone = self.get_main_content_zone(layout_mode="two_column")
+        right_zone = self.get_graphics_zone()
+        left_col_width = left_zone.x_max - left_zone.x_min
+        right_col_width = right_zone.x_max - right_zone.x_min
+        left_col_height = left_zone.y_max - left_zone.y_min
+        right_col_height = right_zone.y_max - right_zone.y_min
 
-        # 整体调整：顶部对齐（技能允许整体调整使用 shift）
+        # 对左栏内容做宽度预检+自动调整
+        left_content = self._precheck_mobject(
+            left_content, max_width=left_col_width * 0.95, max_height=left_col_height * 0.9
+        )
+        # 对右栏图形做尺寸预检+自动调整
+        right_content = self._precheck_mobject(
+            right_content, max_width=right_col_width * 0.95, max_height=right_col_height * 0.9
+        )
+
+        # 左栏：左栏内的内容左对齐 + 垂直居中（在左栏区域内）
+        left_group = VGroup(left_content).arrange(
+            DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=LEFT
+        )
+        left_group = left_zone.place_content(left_group, h_align="left")
+
+        # 右栏：右栏内的内容右对齐 + 垂直居中（在图形区区域内）
+        right_group = VGroup(right_content).arrange(
+            DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=RIGHT
+        )
+        right_group = right_zone.place_content(right_group, h_align="right")
+
+        # 两栏顶部对齐
         top_y = max(left_group.get_top()[1], right_group.get_top()[1])
-        left_group.move_to(
-            [left_group.get_center()[0], top_y - left_group.height / 2, 0]
-        )
-        right_group.move_to(
-            [right_group.get_center()[0], top_y - right_group.height / 2, 0]
-        )
+        left_group.shift(UP * (top_y - left_group.get_top()[1]))
+        right_group.shift(UP * (top_y - right_group.get_top()[1]))
 
-        return VGroup(left_group, right_group)
+        # 组装最终结果
+        result = VGroup(left_group, right_group)
+
+        # ── 事后校验：放置后必须校验，溢出时自动走优化链 ──
+        all_placed = [left_group, right_group]
+        violations = self.validate_layout(all_placed, region="content")
+        if violations:
+            # 获取当前分栏信息供优化器使用
+            zones = ZoneConstants.compute(self.camera.frame_width, self.camera.frame_height)
+            col_layout = ZoneConstants.compute_column_layout(zones, num_columns=2, has_graphics=True)
+            opt_result = self.handle_violation(
+                violations, all_placed, column_layout=col_layout[0]
+            )
+            if opt_result and not opt_result.is_successful:
+                logging.warning(
+                    "[place_two_column] 自动优化失败，建议拆分原子或缩小内容"
+                )
+
+        return result
 
     def place_three_column(
         self,
@@ -150,6 +197,10 @@ class LayoutScene(Scene):
     ) -> VGroup:
         """三栏布局：左（步骤）+ 中（公式）+ 右（图形）
 
+        内置**事前预检**：三栏内容在放置前均做宽度/高度检测，
+        超限时自动换行（文本）或缩放（图形）。中栏保留原有的
+        scale-to-fit 作为第二道防线。
+
         Args:
             left_content: 左栏内容（步骤说明/概念）
             mid_content: 中栏内容（公式）
@@ -158,29 +209,65 @@ class LayoutScene(Scene):
         Returns:
             包含三栏的 VGroup
         """
+        # 获取各栏区域
         main_zone = self.get_main_content_zone(layout_mode="three_column")
+        right_zone = self.get_graphics_zone()
 
+        # 计算各栏可用尺寸
+        main_width = main_zone.x_max - main_zone.x_min
+        main_height = main_zone.y_max - main_zone.y_min
+        left_col_width = main_width / 2  # 左栏占主内容区一半
+        mid_col_width = main_width / 2    # 中栏占主内容区一半
+        right_col_width = right_zone.x_max - right_zone.x_min
+        right_col_height = right_zone.y_max - right_zone.y_min
+
+        # ── 事前预检：三栏分别处理 ──
+        left_content = self._precheck_mobject(
+            left_content, max_width=left_col_width * 0.92, max_height=main_height * 0.9
+        )
+        mid_content = self._precheck_mobject(
+            mid_content, max_width=mid_col_width * 0.95, max_height=main_height * 0.9
+        )
+        right_content = self._precheck_mobject(
+            right_content, max_width=right_col_width * 0.95, max_height=right_col_height * 0.9
+        )
+
+        # 左栏：左栏内的内容左对齐 + 垂直居中（在左栏区域内）
         left_col = VGroup(left_content).arrange(
             DOWN, buff=ZoneConstants.ROW_BUFF * 0.8, aligned_edge=LEFT
         )
+        # 左栏内的内容左对齐到左栏区域左边界，垂直居中
+        left_col = main_zone.place_content(left_col, h_align="left")
+
+        # 中栏：中栏内的内容左对齐 + 垂直居中（在中栏区域内）
+        # 中栏区域：主内容区的右半部分（左栏 + 中栏共同占用 main_zone）
+        mid_x_min = main_zone.x_min + main_width / 2
+
         mid_col = VGroup(mid_content).arrange(
             DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=LEFT
         )
+        # 中栏内的内容左对齐到中栏区域左边界，垂直居中
+        mid_col.move_to([mid_x_min + mid_col.width / 2, main_zone.center_y, 0])
+        # 溢出防护：中栏内容超出中栏右边界时自动缩放（第二道防线）
+        if mid_col.get_right()[0] > main_zone.x_max:
+            mid_col.scale(
+                main_zone.x_max / mid_col.get_right()[0], about_point=mid_col.get_left()
+            )
+            mid_col.move_to([mid_x_min + mid_col.width / 2, main_zone.center_y, 0])
 
-        # 使用 zone.place_content 约束，而非硬编码坐标
-        left_col.move_to([main_zone.center_x, main_zone.center_y, 0])
-        mid_col.move_to([main_zone.center_x + 3.5, main_zone.center_y, 0])
-
-        right_group = self.place_graphics(right_content)
-
-        # 整体调整：顶部对齐（技能允许整体调整）
-        top_y = max(
-            left_col.get_top()[1], mid_col.get_top()[1], right_group.get_top()[1]
+        # 右栏：右栏内的内容右对齐 + 垂直居中（在图形区区域内）
+        right_col = VGroup(right_content).arrange(
+            DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=RIGHT
         )
-        for col in [left_col, mid_col, right_group]:
-            col.move_to([col.get_center()[0], top_y - col.height / 2, 0])
+        right_col = right_zone.place_content(right_col, h_align="right")
 
-        return VGroup(left_col, mid_col, right_group)
+        # 三栏顶部对齐
+        top_y = max(left_col.get_top()[1], mid_col.get_top()[1], right_col.get_top()[1])
+        left_col.shift(UP * (top_y - left_col.get_top()[1]))
+        mid_col.shift(UP * (top_y - mid_col.get_top()[1]))
+        right_col.shift(UP * (top_y - right_col.get_top()[1]))
+
+        return VGroup(left_col, mid_col, right_col)
 
     def safe_place(self, mobject: Mobject) -> Mobject:
         """安全放置：确保不超出安全区域
@@ -206,6 +293,89 @@ class LayoutScene(Scene):
 
         if shift_x != 0.0 or shift_y != 0.0:
             mobject.shift(RIGHT * shift_x + UP * shift_y)
+
+        return mobject
+
+    def _precheck_mobject(
+        self,
+        mobject: Mobject,
+        max_width: float,
+        max_height: float,
+    ) -> Mobject:
+        """事前预检单个 Mobject 的尺寸，超限时自动调整
+
+        处理策略（按对象类型分层）：
+        1. **VGroup**：递归检查子元素，对每个超宽/超高的子元素分别处理
+        2. **Text / MathTex**：
+           - 宽度超限 → 调用 LayoutOptimizer 的换行逻辑重建为多行
+           - 换行后仍超限 → 缩小 font_size
+        3. **图形类 Mobject**（Arrow, Polygon, VGroup of shapes 等）：
+           - 宽度或高度任一超限 → scale_to_fit 到可用范围内
+
+        Args:
+            mobject: 待检查的 Mobject
+            max_width: 允许的最大宽度（Manim 单位）
+            max_height: 允许的最大高度（Manim 单位）
+
+        Returns:
+            调整后的 Mobject（可能被原地修改，也可能返回原对象）
+        """
+        from manim import Text, MathTex
+
+        # VGroup：递归处理子元素
+        if isinstance(mobject, VGroup) and len(mobject.submobjects) > 0:
+            adjusted_submobjs = []
+            for sub in mobject.submobjects:
+                adjusted = self._precheck_mobject(sub, max_width, max_height)
+                adjusted_submobjs.append(adjusted)
+            return mobject
+
+        obj_width = mobject.width
+        obj_height = mobject.height
+
+        # 未超限，直接返回原对象
+        if obj_width <= max_width and obj_height <= max_height:
+            return mobject
+
+        # 文本/公式对象：优先换行，其次缩放
+        if isinstance(mobject, (Text, MathTex)):
+            # 先尝试换行
+            fake_violation = {
+                "type": "WIDTH_OVERFLOW" if obj_width > max_width else "HEIGHT_OVERFLOW",
+                "column_width": max_width,
+            }
+            optimizer = LayoutOptimizer()
+            wrapped = optimizer._apply_wrap([mobject], fake_violation)
+
+            if wrapped and mobject.width <= max_width and mobject.height <= max_height:
+                logging.info(f"[_precheck_mobject] 换行成功: {type(mobject).__name__}")
+                return mobject
+
+            # 换行不够或失败，尝试缩放字号
+            if isinstance(mobject, (Text, MathTex)):
+                current_font = getattr(mobject, 'font_size', 32)
+                if current_font > LayoutOptimizer.MIN_FONT_SIZE:
+                    scale_factor = min(max_width / obj_width, max_height / obj_height, 0.95)
+                    new_font = max(int(current_font * scale_factor), LayoutOptimizer.MIN_FONT_SIZE)
+                    mobject.font_size = new_font
+                    logging.info(
+                        f"[_precheck_mobject] 字号缩放: {current_font} -> {new_font}"
+                    )
+                    return mobject
+
+        # 图形类对象（非文本）：直接 scale_to_fit
+        is_graphic = not isinstance(mobject, (Text, MathTex))
+        if is_graphic and (obj_width > max_width or obj_height > max_height):
+            scale_x = max_width / obj_width if obj_width > max_width else 1.0
+            scale_y = max_height / obj_height if obj_height > max_height else 1.0
+            scale_factor = min(scale_x, scale_y, 1.0)
+            mobject.scale(scale_factor, about_edge=ORIGIN)
+            logging.info(
+                f"[_precheck_mobject] 图形缩放: "
+                f"{type(mobject).__name__} ×{scale_factor:.2f} "
+                f"(原始 w={obj_width:.2f} h={obj_height:.2f})"
+            )
+            return mobject
 
         return mobject
 
@@ -698,6 +868,115 @@ class LayoutScene(Scene):
                 )
 
         return violations
+
+    # ============================================================
+    # 自动违规处置方法
+    # ============================================================
+
+    def handle_violation(
+        self,
+        violations: List[Dict[str, Any]],
+        mobjects: List[Mobject],
+        column_layout: Optional[Dict] = None,
+        auto_optimize: bool = True,
+    ) -> Optional[OptimizationResult]:
+        """处理布局违规 - 自动执行处置策略
+
+        可选模式：
+        1. 自动优化模式（auto_optimize=True）：调用 LayoutOptimizer 自动执行 3 轮调整
+        2. 手动处置模式（auto_optimize=False）：返回违规报告，等待人工干预
+
+        Args:
+            violations: validate_layout() 返回的违规列表
+            mobjects: 需要优化的 Mobject 列表（会原地修改）
+            column_layout: 当前栏位布局信息（含 x_min/x_max/width）
+            auto_optimize: 是否启用自动优化（默认 True）
+
+        Returns:
+            自动优化时返回 OptimizationResult；手动模式返回 None
+
+        示例::
+
+            violations = self.validate_layout(all_mobjects)
+            if violations:
+                result = self.handle_violation(violations, all_mobjects)
+                if result and result.success:
+                    print("自动优化成功")
+                elif result and not result.success:
+                    print(f"自动优化失败：{result.error_message}")
+        """
+        if not violations:
+            return None
+
+        logging.info(f"[handle_violation] 发现 {len(violations)} 项违规")
+
+        if not auto_optimize:
+            # 手动处置模式：仅输出报告
+            self._print_violation_report(violations)
+            return None
+
+        # 自动优化模式
+        result = self._layout_optimizer.optimize(
+            mobjects=mobjects,
+            violations=violations,
+            column_layout=column_layout,
+        )
+
+        if result.is_successful:
+            logging.info(
+                f"[handle_violation] 优化成功！共执行 {result.rounds_executed} 轮调整"
+            )
+            for adj in result.adjustments:
+                logging.info(
+                    f"  - 第{adj['round']}轮：策略={adj['strategy']}, "
+                    f"{'成功' if adj['success'] else '失败'}"
+                )
+        else:
+            logging.warning(f"[handle_violation] 优化失败，建议人工干预")
+            logging.warning(f"  {result.error_message}")
+
+        return result
+
+    def _print_violation_report(self, violations: List[Dict[str, Any]]) -> None:
+        """打印违规报告（仅供人工查看）"""
+        print("\n" + "=" * 70)
+        print("[LayoutScene] 布局违规报告")
+        print("=" * 70)
+        for i, v in enumerate(violations, 1):
+            print(f"\n[{i}] {v['type']}")
+            print(f"    对象：{v['object_name']}")
+            print(f"    期望：{v['expected']}")
+            print(f"    实际：{v['actual']}")
+            print(f"    详情：{v['detail']}")
+        print("\n" + "=" * 70)
+        print("建议: 根据违规类型调整布局或调用 handle_violation(auto_optimize=True)")
+        print("=" * 70 + "\n")
+
+    def _on_atom_split(
+        self,
+        violation_type: str,
+        mobjects: List[Mobject],
+        suggested_id: str,
+    ) -> None:
+        """拆分原子回调 - 当字号缩小和换行均无效时触发
+
+        Args:
+            violation_type: 违规类型（WIDTH_OVERFLOW / HEIGHT_OVERFLOW）
+            mobjects: 需要拆分的 Mobject 列表
+            suggested_id: 建议的原子 ID 前缀
+
+        注：此方法仅记录日志，实际拆分由 JSON 设计阶段处理。
+        外部代码可捕获此日志，手动拆分原子并重新生成代码。
+        """
+        obj_names = [getattr(m, "name", type(m).__name__) for m in mobjects]
+        logging.warning(
+            f"[_on_atom_split] 需要拆分原子 {suggested_id} "
+            f"(类型={violation_type}, 对象={obj_names})"
+        )
+        logging.warning(
+            f"建议工程师操作：将 JSON 中该原子拆分为 2-3 个独立原子，"
+            f"每个包含原内容的 1/2 或 1/3"
+        )
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 重叠白名单：预定义模式常量 + 模式匹配方法

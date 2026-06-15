@@ -48,19 +48,37 @@ for atom in content_data["atoms"]:
 | visual_action | string | 否 | 视觉动作类型 |
 | speech | string | 否 | 语音文本（无语音时可省略） |
 | duration | number | 是 | 预计时长（秒），默认 6.0 |
+
+**duration 计算规则（强制）**：
+
+`duration` 必须基于 `speech` 字段的字符数按以下公式计算，**禁止随意填写**：
+
 ```
+
+duration = ceil(len(speech.strip()) / SPEECH_SPEED)
+其中 SPEECH_SPEED = 4.0（字符/秒）
+
+```
+
+- 若计算结果 < 3.0 → 取 3.0（最短朗读时长）
+- 若计算结果 > 20.0 → 必须**拆分原子**（将当前 atom 拆为多个，每个 duration ≤ 20.0）
+- `speech` 为空时 → duration 默认取 6.0
+
+示例：speech = "受力分析是力学的基础方法"（13 字符）→ expected = 13/4 = 3.25 → duration = 4.0
 
 **原子类型说明**：
 
 ```
-| type 值 | 含义 | 对应教学阶段 | 说明 |
-|---------|------|-------------|------|
-| definition | 形式化定义 | 阶段③ | 给出严谨的数学定义或定理表述 |
-| intuition | 直观体验 | 阶段② | 用动画、生活类比建立感性认识 |
-| operation | 运算示范 | 阶段④ | 展示如何应用规则进行计算或推导 |
-| counter_intuitive | 反直觉点澄清 | 阶段⑤ | 先展示错误猜测，再证伪并解释原因 |
-| application | 应用与迁移 | 阶段⑥ | 展示生活或工程案例，体现概念价值 |
-| summary | 总结与回顾 | 阶段⑦ | 梳理核心要点，展示知识网络图 |
+
+| type 值           | 含义         | 对应教学阶段 | 说明                             |
+| ----------------- | ------------ | ------------ | -------------------------------- |
+| definition        | 形式化定义   | 阶段③        | 给出严谨的数学定义或定理表述     |
+| intuition         | 直观体验     | 阶段②        | 用动画、生活类比建立感性认识     |
+| operation         | 运算示范     | 阶段④        | 展示如何应用规则进行计算或推导   |
+| counter_intuitive | 反直觉点澄清 | 阶段⑤        | 先展示错误猜测，再证伪并解释原因 |
+| application       | 应用与迁移   | 阶段⑥        | 展示生活或工程案例，体现概念价值 |
+| summary           | 总结与回顾   | 阶段⑦        | 梳理核心要点，展示知识网络图     |
+
 ```
 
 **注意事项**：
@@ -72,10 +90,12 @@ for atom in content_data["atoms"]:
 ### 2.3 content 数组元素结构
 
 ```
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| text | string | 是 | 要显示的文本内容，对于 formula 类型为 LaTeX 表达式 |
-| type | string | 是 | 内容类型：highlight / content / formula / mixed |
+
+| 字段 | 类型   | 必填 | 说明                                               |
+| ---- | ------ | ---- | -------------------------------------------------- |
+| text | string | 是   | 要显示的文本内容，对于 formula 类型为 LaTeX 表达式 |
+| type | string | 是   | 内容类型：highlight / content / formula / mixed    |
+
 ```
 
 注：mixed 类型仅在 tex_template 为 "ctex" 时使用，表示中文与公式混合在同一个字符串中。
@@ -83,12 +103,14 @@ for atom in content_data["atoms"]:
 ### 2.4 类型定义与渲染规则
 
 ```
-| type | 含义 | 渲染方式 | 颜色 | 是否支持中文 | 示例 text |
-|------|------|----------|------|-------------|-----------|
-| highlight | 强调文本 | Text() | #66DDFF（浅蓝） | 支持 | "等比例缩放" |
-| content | 普通文本 | Text() | #FFFFFF（白色） | 支持 | "信息完整保留" |
-| formula | 数学公式 | MathTex() | #FFFFFF（白色） | 禁止 | "E = mc^2" |
-| mixed | 混合内容 | Tex(tex_template=ctex) | #FFFFFF（白色） | 支持 | "矩阵 $a_{ij}$ 表示元素" |
+
+| type      | 含义     | 渲染方式               | 颜色            | 是否支持中文 | 示例 text                |
+| --------- | -------- | ---------------------- | --------------- | ------------ | ------------------------ |
+| highlight | 强调文本 | Text()                 | #66DDFF（浅蓝） | 支持         | "等比例缩放"             |
+| content   | 普通文本 | Text()                 | #FFFFFF（白色） | 支持         | "信息完整保留"           |
+| formula   | 数学公式 | MathTex()              | #FFFFFF（白色） | 禁止         | "E = mc^2"               |
+| mixed     | 混合内容 | Tex(tex_template=ctex) | #FFFFFF（白色） | 支持         | "矩阵 $a_{ij}$ 表示元素" |
+
 ```
 
 **类型映射规则**（兼容旧格式）：
@@ -114,15 +136,17 @@ for atom in content_data["atoms"]:
 JSON 示例：
 
 ```
+
 {
-  "id": "mixed_formula",
-  "type": "definition",
-  "tex_template": "ctex",
-  "content": [
-    {"text": "矩阵 $a_{ij}$ 表示第 $i$ 行第 $j$ 列的元素", "type": "mixed"}
-  ]
+"id": "mixed*formula",
+"type": "definition",
+"tex_template": "ctex",
+"content": [
+{"text": "矩阵 $a*{ij}$ 表示第 $i$ 行第 $j$ 列的元素", "type": "mixed"}
+]
 }
-```
+
+````
 
 ### 2.5 formula 类型的特殊处理
 
@@ -148,7 +172,7 @@ JSON 示例：
   { "text": "a_{ij}", "type": "formula" },
   { "text": " 表示第 i 行第 j 列的元素", "type": "content" }
 ]
-```
+````
 
 3. **LaTeX 语法验证**：
    - 检查括号匹配

@@ -122,29 +122,37 @@ class ZoneBase(VGroup):
         """容器高度"""
         return self._height
     
-    def place_content(self, content_group: VGroup) -> VGroup:
+    def place_content(self, content_group: VGroup, h_align: str = "center") -> VGroup:
         """将内容约束在容器内（子类可重写定位逻辑）
-        
+
         Args:
             content_group: 内容组
-            
+            h_align: 水平对齐方式，可选 "left" | "center" | "right"
+
         Returns:
             已定位的内容组
         """
         content_width = content_group.get_width()
         content_height = content_group.get_height()
-        
-        # 边界检查：内容不得超出容器
+
+        # 溢出检测与缩放：内容超出容器时按比例缩放
         scale_factor = 1.0
         if content_width > self._width:
             scale_factor = min(scale_factor, self._width / content_width)
         if content_height > self._height:
             scale_factor = min(scale_factor, self._height / content_height)
-        
+
         if scale_factor < 1.0:
             content_group.scale(scale_factor, about_point=content_group.get_center())
-        
-        content_group.move_to([self._center_x, self._center_y, 0])
+
+        # 水平对齐：根据 h_align 参数决定
+        if h_align == "left":
+            content_group.move_to([self._x_min + content_width / 2, self._center_y, 0])
+        elif h_align == "right":
+            content_group.move_to([self._x_max - content_width / 2, self._center_y, 0])
+        else:  # center
+            content_group.move_to([self._center_x, self._center_y, 0])
+
         self._content_group = content_group
         return content_group
     

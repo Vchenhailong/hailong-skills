@@ -97,6 +97,12 @@ class CourseSchemaValidator:
     # 中文正则
     CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
 
+    # MathTex/Tex 调用中 \text{} 包裹中文的正则（源码级扫描）
+    # 匹配模式: MathTex(r"... \text{...中文...} ...") 或 Tex(r"... \text{...中文...} ...")
+    CHINESE_IN_TEX_PATTERN = re.compile(
+        r"(?:MathTex|Tex)\s*\(\s*r?[\"']([^\"]*\\text\s*\{[^\}]*[\u4e00-\u9fff][^\}]*\}[^\"]*)[\"']"
+    )
+
     def validate_file(self, json_path: str) -> List[ValidationError]:
         """验证 JSON 文件
 
@@ -211,7 +217,7 @@ class CourseSchemaValidator:
                     )
                 )
 
-        # duration 字段
+        # duration 字段：类型 + 范围 + 数值合理性校验
         if "duration" in atom:
             if not isinstance(atom["duration"], (int, float)):
                 errors.append(ValidationError(path, "duration", "类型应为 number"))
@@ -221,6 +227,48 @@ class CourseSchemaValidator:
                         path, "duration", "时长必须大于 0", atom["duration"]
                     )
                 )
+            elif atom["duration"] < 3.0:
+                errors.append(
+                    ValidationError(
+                        path,
+                        "duration",
+                        f"时长 {atom['duration']}s 小于最小值 3.0s（语音朗读最低需求）",
+                        atom["duration"],
+                    )
+                )
+            elif atom["duration"] > 20.0:
+                errors.append(
+                    ValidationError(
+                        path,
+                        "duration",
+                        f"时长 {atom['duration']}s 超过最大值 20.0s（应拆分原子）",
+                        atom["duration"],
+                    )
+                )
+
+            # duration 与 speech 字符数的匹配度校验
+            # 计算公式: expected_duration = ceil(len(speech) / SPEECH_SPEED)
+            # SPEECH_SPEED = 4.0 字符/秒，允许 ±3 秒误差（含动画缓冲）
+            if "speech" in atom and isinstance(atom["speech"], str):
+                speech_len = len(atom["speech"].strip())
+                if speech_len > 0:
+                    expected = max(speech_len / 4.0, 3.0)
+                    actual = float(atom["duration"])
+                    tolerance = 3.0  # 允许 ±3 秒误差（含动画过渡/停顿缓冲）
+                    if abs(actual - expected) > tolerance:
+                        errors.append(
+                            ValidationError(
+                                path,
+                                "duration",
+                                (
+                                    f"与 speech 长度不匹配: "
+                                    f"实际={actual:.1f}s, "
+                                    f"期望≈{expected:.1f}s "
+                                    f"({speech_len}字符 / 4字符每秒)"
+                                ),
+                                actual,
+                            )
+                        )
 
         # layout 字段（可选）
         if "layout" in atom:
@@ -370,6 +418,82 @@ class CourseSchemaValidator:
             return f"✅ {json_path} 验证通过"
 
         lines = [f"❌ {json_path} 验证失败，共 {len(errors)} 个错误："]
+        for err in errors:
+            lines.append(f"  - {err}")
+
+        return "\n".join(lines)
+
+    # ================================================================
+    # 源码级校验（G2.5：LaTeX 合规性前置检查）
+    # ================================================================
+
+    def validate_source_file(self, source_path: str) -> List[ValidationError]:
+        """扫描 Python 源码中的 MathTex/Tex 中文污染
+
+        检测规则（json_schema.md §2.5）：
+        - 禁止在 MathTex() / Tex() 的参数字符串中出现 \text{...中文...}
+        - 正确做法：中文使用 Text() 渲染，或拆分为 mixed 类型 + ctex 模板
+
+        Args:
+            source_path: Python 源码文件路径（如 content/xxx.py）
+
+        Returns:
+            错误列表，空表示无违规
+        """
+        path = Path(source_path)
+        if not path.exists():
+            return [ValidationError(str(path), "file", "源码文件不存在")]
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                source = f.read()
+        except Exception as e:
+            return [ValidationError(str(path), "file", f"读取失败: {e}")]
+
+        errors = []
+        lines = source.split("\n")
+
+        for line_no, line in enumerate(lines, 1):
+            # 跳过注释行
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+
+            matches = self.CHINESE_IN_TEX_PATTERN.findall(line)
+            for matched_tex in matches:
+                # 提取 \text{} 中的中文内容用于报告
+                text_match = re.search(r"\\text\s*\{([^}]*(?:[\u4e00-\u9fff])[^}]*)\}", matched_tex)
+                chinese_content = text_match.group(1) if text_match else "(提取失败)"
+
+                errors.append(
+                    ValidationError(
+                        f"{source_path}:{line_no}",
+                        "CHINESE_IN_TEX_VIOLATION",
+                        (
+                            f"MathTex/Tex 参数中包含中文 "
+                            f"(应使用 Text() 或 mixed+ctex 替代)"
+                        ),
+                        f"\\text{{{chinese_content}}}",
+                    )
+                )
+
+        return errors
+
+    def validate_source_and_report(self, source_path: str) -> str:
+        """扫描源码并生成人类可读的报告
+
+        Args:
+            source_path: Python 源码路径
+
+        Returns:
+            报告字符串
+        """
+        errors = self.validate_source_file(source_path)
+
+        if not errors:
+            return f"✅ {source_path} 源码 LaTeX 合规性检查通过"
+
+        lines = [f"❌ {source_path} 发现 {len(errors)} 处中文混入 MathTex/Tex："]
         for err in errors:
             lines.append(f"  - {err}")
 

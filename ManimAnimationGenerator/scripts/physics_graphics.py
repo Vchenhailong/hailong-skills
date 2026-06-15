@@ -26,12 +26,21 @@ from manim import (
     Line,
     Circle,
     Rectangle,
+    DoubleArrow,
+    DashedLine,
+    Vector,
+    Square,
+    Angle,
+    RightAngle,
+    Elbow,
+    Polygon,
     Dot,
     ArrowTip,
     Arrow,
     Arc,
     MathTex,
     Text,
+    MarkupText,
     WHITE,
     YELLOW_C,
     ORANGE,
@@ -63,6 +72,7 @@ BATTERY_GAP = 0.15  # 极板间距
 RESISTOR_WIDTH = 1.0  # 电阻矩形宽度（IEC 60617-04 S00139）
 RESISTOR_HEIGHT = 0.4  # 电阻矩形高度
 BULB_RADIUS = 0.3  # 灯泡圆半径（人教版教材）
+WIRE_LENGTH = 0.3  # 元件自动引出导线长度（IEC 连接规范最小值）
 SWITCH_CONTACT_GAP = 0.4  # 开关触点间距（GB/T 4728.02）
 SWITCH_DOT_RADIUS = 0.04  # 开关触点圆半径
 METER_RADIUS = 0.25  # 电表圆半径（人教版教材）
@@ -176,15 +186,20 @@ def create_battery(start, end, label="", voltage=""):
     group = VGroup(wire_left, short_line, long_line, wire_right)
 
     # 极性标记（IEC 60617 强制要求：正负极标识不得缺失）
-    plus_sign = MathTex("+", font_size=20).next_to(long_line, perp, buff=0.05)
-    minus_sign = MathTex("-", font_size=20).next_to(short_line, perp, buff=0.05)
+    # 使用显式坐标定位标签，基于元件几何中心+垂直方向偏移（遵循 F1：禁用 .next_to()）
+    plus_sign = MathTex("+", font_size=20)
+    plus_sign.move_to(long_line.get_center() + perp * (BATTERY_LONG_HALF + 0.08))
+    minus_sign = MathTex("-", font_size=20)
+    minus_sign.move_to(short_line.get_center() + perp * (BATTERY_SHORT_HALF + 0.08))
     group.add(plus_sign, minus_sign)
 
     if voltage:
-        v_lbl = MathTex(voltage, font_size=28).next_to(group, perp, buff=0.15)
+        v_lbl = MathTex(voltage, font_size=28)
+        v_lbl.move_to(group.get_center() + perp * (0.5 + 0.15))
         group.add(v_lbl)
     if label:
-        l_obj = MathTex(label, font_size=28).next_to(group, -perp, buff=0.15)
+        l_obj = MathTex(label, font_size=28)
+        l_obj.move_to(group.get_center() + (-perp) * (0.5 + 0.15))
         group.add(l_obj)
 
     group.connection_points = {"start": start.copy(), "end": end.copy()}
@@ -240,10 +255,12 @@ def create_resistor(start, end, label="", resistance=""):
     group = VGroup(wire_left, body, wire_right)
 
     if label:
-        l_obj = MathTex(label, font_size=28).next_to(body, perp, buff=0.1)
+        l_obj = MathTex(label, font_size=28)
+        l_obj.move_to(body.get_center() + perp * (RESISTOR_HEIGHT / 2 + 0.1 + 0.12))
         group.add(l_obj)
     if resistance:
-        r_lbl = MathTex(resistance, font_size=24).next_to(body, -perp, buff=0.1)
+        r_lbl = MathTex(resistance, font_size=24)
+        r_lbl.move_to(body.get_center() + (-perp) * (RESISTOR_HEIGHT / 2 + 0.1 + 0.1))
         group.add(r_lbl)
 
     group.connection_points = {"start": start.copy(), "end": end.copy()}
@@ -255,7 +272,8 @@ def create_resistor(start, end, label="", resistance=""):
 def create_bulb(center=None, radius=BULB_RADIUS, label="", lit=False):
     """创建灯泡元件（人教版初中物理通用符号）
 
-    功能：创建圆形外框 + 内部叉号(×)的灯泡符号。
+    功能：创建圆形外框 + 内部叉号 (×) 的灯泡符号。
+         两端各自带 0.3 单位长度的引出导线（遵循 IEC 60617 连接规范）。
          lit=False 时 YELLOW_C 空心；lit=True 时 ORANGE 半透明填充。
 
     参数：
@@ -264,8 +282,8 @@ def create_bulb(center=None, radius=BULB_RADIUS, label="", lit=False):
         label: 标签 MathTex，默认空
         lit: 是否点亮状态，默认 False
 
-    返回：VGroup，named_parts 含 outer/cross_l1/cross_l2；
-         connection_points 含 left/right（圆周左右接点）；component_type="bulb"
+    返回：VGroup，named_parts 含 outer/cross_l1/cross_l2/wire_left/wire_right；
+         connection_points 含 start/end（导线两端接点）；component_type="bulb"
 
     标准依据：人教版初中物理教材灯泡符号
     """
@@ -292,16 +310,38 @@ def create_bulb(center=None, radius=BULB_RADIUS, label="", lit=False):
         stroke_width=1.5,
     )
 
-    group = VGroup(outer, cross_l1, cross_l2)
+    # 添加自动引出导线（各 0.3 单位，符合 IEC 连接规范）
+    wire_left = Line(
+        center + np.array([-radius - WIRE_LENGTH / 2, 0, 0]),
+        center + np.array([-radius, 0, 0]),
+        stroke_color=stroke_color,
+        stroke_width=2,
+    )
+    wire_right = Line(
+        center + np.array([radius, 0, 0]),
+        center + np.array([radius + WIRE_LENGTH / 2, 0, 0]),
+        stroke_color=stroke_color,
+        stroke_width=2,
+    )
+
+    group = VGroup(wire_left, outer, cross_l1, cross_l2, wire_right)
 
     if label:
-        l_obj = MathTex(label, font_size=28).next_to(outer, UP, buff=0.1)
+        l_obj = MathTex(label, font_size=28)
+        l_obj.move_to(outer.get_center() + UP * (radius + 0.1 + 0.12))
         group.add(l_obj)
 
-    left_pt = center + np.array([-radius, 0, 0])
-    right_pt = center + np.array([radius, 0, 0])
-    group.connection_points = {"left": left_pt, "right": right_pt}
-    group.named_parts = {"outer": outer, "cross_l1": cross_l1, "cross_l2": cross_l2}
+    # 导线两端为新的 connection_points
+    start_pt = wire_left.get_start()
+    end_pt = wire_right.get_end()
+    group.connection_points = {"start": start_pt, "end": end_pt}
+    group.named_parts = {
+        "outer": outer,
+        "cross_l1": cross_l1,
+        "cross_l2": cross_l2,
+        "wire_left": wire_left,
+        "wire_right": wire_right,
+    }
     group.component_type = "bulb"
     return group
 
@@ -347,7 +387,10 @@ def create_switch(start, end, closed=False, label=""):
     group = VGroup(wire_left, dot1, dot2, arm, wire_right)
 
     if label:
-        l_obj = MathTex(label, font_size=28).next_to(group, perp, buff=0.15)
+        l_obj = MathTex(label, font_size=28)
+        l_obj.move_to(
+            group.get_center() + perp * (SWITCH_CONTACT_GAP / 2 + 0.15 + 0.12)
+        )
         group.add(l_obj)
 
     group.connection_points = {
@@ -392,7 +435,8 @@ def create_ammeter(center=None, radius=METER_RADIUS, label=""):
     group = VGroup(circle, marker)
 
     if label:
-        l_obj = MathTex(label, font_size=28).next_to(circle, UP, buff=0.1)
+        l_obj = MathTex(label, font_size=28)
+        l_obj.move_to(circle.get_center() + UP * (radius + 0.1 + 0.12))
         group.add(l_obj)
 
     left_pt = center + np.array([-radius, 0, 0])
@@ -427,7 +471,8 @@ def create_voltmeter(center=None, radius=METER_RADIUS, label=""):
     group = VGroup(circle, marker)
 
     if label:
-        l_obj = MathTex(label, font_size=28).next_to(circle, UP, buff=0.1)
+        l_obj = MathTex(label, font_size=28)
+        l_obj.move_to(circle.get_center() + UP * (radius + 0.1 + 0.12))
         group.add(l_obj)
 
     left_pt = center + np.array([-radius, 0, 0])
@@ -483,7 +528,12 @@ def create_capacitor(
     group = VGroup(upper_plate, lower_plate)
 
     if label:
-        l_obj = MathTex(label, font_size=28).next_to(group, LEFT, buff=0.15)
+        l_obj = MathTex(label, font_size=28)
+        # 标签置于极板组左侧（显式坐标，遵循 F1：禁用 .next_to()）
+        label_pos = group.get_center() + LEFT * (
+            CAPACITOR_PLATE_LENGTH / 2 + 0.15 + 0.12
+        )
+        l_obj.move_to(label_pos)
         group.add(l_obj)
 
     top_pt = np.array([cx, upper_y, 0])
@@ -539,7 +589,9 @@ def create_rheostat(start, end, label=""):
     slider_arrow.move_to(slider_end)
     slider_arrow.scale(0.3)
 
-    slider_label = MathTex("P", font_size=24).next_to(slider_arrow, perp, buff=0.1)
+    # 滑片标签（显式坐标定位，遵循 F1：禁用 .next_to()）
+    slider_label = MathTex("P", font_size=24)
+    slider_label.move_to(slider_arrow.get_center() + perp * 0.2)
 
     left_edge = center - unit_dir * (RHEOSTAT_WIDTH / 2)
     right_edge = center + unit_dir * (RHEOSTAT_WIDTH / 2)
@@ -556,7 +608,8 @@ def create_rheostat(start, end, label=""):
     )
 
     if label:
-        l_obj = MathTex(label, font_size=28).next_to(body, -perp, buff=0.1)
+        l_obj = MathTex(label, font_size=28)
+        l_obj.move_to(body.get_center() + (-perp) * (RHEOSTAT_HEIGHT / 2 + 0.1 + 0.12))
         group.add(l_obj)
 
     group.connection_points = {"start": start.copy(), "end": end.copy()}
@@ -662,6 +715,60 @@ def create_arc_bridge(cross_point, radius=0.08):
     return arc
 
 
+def create_inclined_plane(
+    base_center: List[float] = None,
+    length: float = 3.0,
+    angle_deg: float = 30.0,
+    label: str = "",
+    font_size: int = 24,
+) -> VGroup:
+    """创建斜面（人教版高中物理力学）
+
+    功能：创建直角三角形斜面，底边水平，斜边倾角可指定。
+
+    参数：
+        base_center: 斜面底部中心位置 [x, y, 0]
+        length: 斜面斜边长度，默认 3.0
+        angle_deg: 倾斜角度（度），默认 30.0
+        label: 标签 MathTex（如 "m" 或 "θ=30°"），默认空
+        font_size: 标签字号，默认 24
+
+    返回：VGroup，包含斜面三角形；
+         无 connection_points（非电路元件）；component_type="inclined_plane"
+
+    标准依据：人教版高中物理必修一斜面模型
+    """
+    if base_center is None:
+        base_center = ORIGIN
+    bc = np.array(base_center, dtype=float)
+
+    angle_rad = np.radians(angle_deg)
+    dx = length * np.cos(angle_rad)
+    dy = length * np.sin(angle_rad)
+
+    # 斜面三角形：底边 + 垂直边 + 斜边
+    triangle = Polygon(
+        bc,
+        bc + np.array([dx, 0, 0]),
+        bc + np.array([dx, dy, 0]),
+        fill_color="#555555",
+        fill_opacity=0.6,
+        stroke_color="#888888",
+        stroke_width=2,
+    )
+
+    group = VGroup(triangle)
+
+    if label:
+        label_pos = bc + np.array([dx / 2, -0.3, 0])
+        label_obj = MathTex(label, font_size=font_size, color="#888888")
+        label_obj.move_to(label_pos)
+        group.add(label_obj)
+
+    group.component_type = "inclined_plane"
+    return group
+
+
 def create_force_arrow(origin, direction_vector, magnitude=1.0, label="", color=None):
     """创建力矢量箭头（GB/T 4460-2013 / 人教版）
 
@@ -677,6 +784,13 @@ def create_force_arrow(origin, direction_vector, magnitude=1.0, label="", color=
 
     返回：VGroup，named_parts 含 arrow/label_text；
          connection_points 含 origin/tip；component_type="force_arrow"
+
+    坐标快照行为：
+        connection_points 中的 origin/tip 在函数调用时记录为静态快照。
+        若传入的 origin 来自已变换过的图元（如旋转后的小车），
+        必须确保该坐标本身是变换后的实时值（通过 .get_center()、
+        .get_bottom()、named_parts["xxx"].get_xxx() 动态获取），
+        而非该图元的 connection_points 快照。
 
     标准依据：GB/T 4460-2013 第 7 章（实心三角箭头，从作用点出发）
     """
@@ -777,6 +891,16 @@ def create_car(
     返回：VGroup，named_parts 含 body/wheel_l/wheel_r；
          connection_points 含 center（质心）；component_type="car"
 
+    坐标快照行为：
+        connection_points 和 named_parts 中的坐标在 VGroup 创建时被记录为静态快照。
+        对返回的 VGroup 执行 .rotate()、.scale()、.shift() 等变换后，
+        这些快照坐标不会自动更新。调用者必须在变换后通过动态查询获取正确坐标：
+
+        - 质心: car.named_parts["body"].get_center()     （而非 car.connection_points["center"]）
+        - 底部: car.get_bottom() 或 car.named_parts["body"].get_bottom()
+        - 左轮: car.named_parts["wheel_l"].get_center()
+        - 右轮: car.named_parts["wheel_r"].get_center()
+
     标准依据：人教版初中物理教材小车符号
     """
     bottom_center = (
@@ -814,7 +938,8 @@ def create_car(
     group = VGroup(body, wheel_l, wheel_r)
 
     if label:
-        lbl = MathTex(label, font_size=28).next_to(body, UP, buff=0.1)
+        lbl = MathTex(label, font_size=28)
+        lbl.move_to(body.get_center() + UP * (height / 2 + 0.1 + 0.12))
         group.add(lbl)
 
     group.connection_points = {"center": body_center.copy()}
@@ -871,31 +996,22 @@ def create_lever(
 
     group = VGroup(bar, fulcrum_triangle)
 
-    # 左端力臂标签
+    # 左端力臂标签（显式坐标定位，遵循 F1：禁用 .next_to()）
     if label_left:
-        lbl_l = MathTex(label_left, font_size=28).next_to(
-            bar_left,
-            DOWN,
-            buff=0.15,
-        )
+        lbl_l = MathTex(label_left, font_size=28)
+        lbl_l.move_to(bar_left + DOWN * 0.3)
         group.add(lbl_l)
 
     # 右端力臂标签
     if label_right:
-        lbl_r = MathTex(label_right, font_size=28).next_to(
-            bar_right,
-            DOWN,
-            buff=0.15,
-        )
+        lbl_r = MathTex(label_right, font_size=28)
+        lbl_r.move_to(bar_right + DOWN * 0.3)
         group.add(lbl_r)
 
     # 支点标签
     if label_fulcrum:
-        lbl_f = Text(label_fulcrum, font_size=20, color=WHITE).next_to(
-            fulcrum,
-            DOWN,
-            buff=0.05,
-        )
+        lbl_f = Text(label_fulcrum, font_size=20, color=WHITE)
+        lbl_f.move_to(fulcrum + DOWN * 0.2)
         group.add(lbl_f)
 
     group.connection_points = {
@@ -974,7 +1090,8 @@ def create_wall(
             group.add(slant_line)
 
     if label:
-        lbl = MathTex(label, font_size=28).next_to(wall_rect, UP, buff=0.1)
+        lbl = MathTex(label, font_size=28)
+        lbl.move_to(wall_rect.get_center() + UP * (height / 2 + 0.1 + 0.12))
         group.add(lbl)
 
     if orientation == "vertical":
@@ -1461,6 +1578,7 @@ __all__ = [
     "RESISTOR_WIDTH",
     "RESISTOR_HEIGHT",
     "BULB_RADIUS",
+    "WIRE_LENGTH",
     "SWITCH_CONTACT_GAP",
     "SWITCH_DOT_RADIUS",
     "METER_RADIUS",
@@ -1480,6 +1598,7 @@ __all__ = [
     "create_car",
     "create_lever",
     "create_wall",
+    "create_inclined_plane",
     "create_container",
     "create_liquid",
     # 电路组装

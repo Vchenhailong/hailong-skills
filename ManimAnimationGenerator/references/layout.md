@@ -568,7 +568,7 @@ Step 6: 上界约束检查
 
 ### 9.5 多行文本处理
 
-- 单行最大字符数：15个汉字 / 30个英文字符
+- 单行最大字符数：20个汉字 / 40个英文字符
 - 超长文本自动拆分（优先在标点处断行）
 - 拆分后多行垂直排列：`VGroup(*lines).arrange(DOWN, buff=间距)`
 - 底衬高度随行数自动扩展
@@ -987,6 +987,205 @@ circle = Circle(radius=0.2).move_to([2, 3, 0])
 
 - 开发调试阶段：保留坐标参考系（`self.add(axes)`）
 - 最终视频：注释或删除 `self.add(axes)`，仅保留图形
+
+## 16. 运行时动态调整机制（新增）
+
+### 16.1 概述
+
+当 `validate_layout()` 检测布局违规时，系统会自动执行**3 轮递进调整策略**，无需人工干预。
+
+**调整流程**：
+
+```
+validate_layout() 返回违规 → LayoutOptimizer.optimize() 自动执行
+                                                     ↓
+                        第 1 轮：缩小字号（scale_font）→ 重新测量 → 验证
+                                                     ↓（失败）
+                        第 2 轮：换行策略（wrap_content）→ 重新测量 → 验证
+                                                     ↓（失败）
+                        第 3 轮：拆分原子（split_atom）→ 调用外部回调 → 结束
+```
+
+### 16.2 自动优化器使用
+
+**在场景代码中调用**：
+
+```python
+from layout.scene_base import LayoutScene
+
+class MyScene(LayoutScene):
+    def construct(self):
+        # 1. 创建内容
+        texts = [Text(f"Line {i}") for i in range(5)]
+        all_mobjects = VGroup(*texts)
+
+        # 2. 放置内容
+        self.place_in_main_zone(all_mobjects, layout_mode="vertical")
+
+        # 3. 验证布局
+        violations = self.validate_layout(all_mobjects)
+
+        # 4. 自动处理违规（推荐）
+        if violations:
+            result = self.handle_violation(violations, list(all_mobjects))
+            if result and result.success:
+                print(f"自动优化成功，执行 {result.rounds_executed} 轮调整")
+            elif result and not result.success:
+                print(f"自动优化失败：{result.error_message}")
+```
+
+**手动处置模式**（仅输出报告）：
+
+```python
+# 不调用自动优化，仅查看违规报告
+result = self.handle_violation(violations, list(all_mobjects), auto_optimize=False)
+# result = None，但控制台会打印详细违规报告
+```
+
+### 16.3 字体自适应算法
+
+**静态预估**（在设计阶段）：
+
+```python
+from layout.constants import ZoneConstants
+
+# 根据可用宽度自动计算字号
+content_width = 12.0  # 预估内容宽度
+available_width = 13.5  # 栏位宽度
+font_size = ZoneConstants.auto_font_size(
+    content_width=content_width,
+    available_width=available_width,
+    base_size=32,
+    min_size=24,
+    max_size=34
+)
+# 返回结果：28（根据比例自动缩小）
+```
+
+**运行时实测**（在渲染阶段）：
+
+```python
+from layout.engine import LayoutEngine
+
+# 实测内容尺寸
+texts = [Text(f"Line {i}") for i in range(5)]
+width, height = LayoutEngine.measure_content_dims(texts)
+print(f"实际宽={width:.2f}, 高={height:.2f}")
+```
+
+### 16.4 调整策略详解
+
+| 轮次        | 策略                       | 适用范围           | 执行条件           | 调整幅度      |
+| ----------- | -------------------------- | ------------------ | ------------------ | ------------- |
+| **第 1 轮** | `scale_font`（缩小字号）   | 宽度溢出、高度溢出 | 当前字号 > 24px    | 缩放到 0.9 倍 |
+| **第 2 轮** | `wrap_content`（换行策略） | 高度溢出（公式）   | 公式长度 > 60 字符 | 插入换行符    |
+| **第 3 轮** | `split_atom`（拆分原子）   | 任意溢出           | 字号已触及下限     | 调用外部回调  |
+
+### 16.5 日志输出示例
+
+**成功优化**：
+
+```
+[handle_violation] 发现 2 项违规
+[handle_violation] 优化成功！共执行 2 轮调整
+  - 第 1 轮：策略=scale_font, 成功
+  - 第 2 轮：策略=wrap_content, 成功
+```
+
+**优化失败**：
+
+```
+[handle_violation] 发现 3 项违规
+[handle_violation] 优化失败，建议人工干预
+  经过 3 轮自动优化仍无法解决布局问题。
+  建议：将相关原子拆分为更细粒度的独立原子。
+  调整日志：
+    第 1 轮：策略=scale_font, 类型=WIDTH_OVERFLOW, 成功
+    第 2 轮：策略=wrap_content, 类型=HEIGHT_OVERFLOW, 失败
+    第 3 轮：策略=split_atom, 类型=WIDTH_OVERFLOW, 成功（触发回调）
+```
+
+### 16.6 回调机制
+
+当需要拆分原子时，优化器会调用 `on_split_callback`：
+
+```python
+def _on_atom_split(self, violation_type, mobjects, suggested_id):
+    """拆分原子回调"""
+    logging.warning(f"需要拆分原子 {suggested_id} (类型={violation_type})")
+    logging.warning("建议工程师操作：将 JSON 中该原子拆分为 2-3 个独立原子")
+```
+
+**工程师操作**：
+
+1. 查看日志，定位需要拆分的原子 ID
+2. 打开对应 JSON 文件
+3. 将该原子拆分为多个独立原子（内容均分）
+4. 重新生成代码
+
+### 16.7 与布局决策引擎的配合
+
+**布局决策流程**（`LayoutEngine.decide()`）：
+
+```
+1. 静态预估内容尺寸（estimated_height/width）
+   ↓
+2. 根据阈值决策布局模式（单栏/两栏/三栏）
+   ↓
+3. 运行时实测内容尺寸（LayoutEngine.measure_content_dims()）
+   ↓
+4. 验证布局（validate_layout()）
+   ↓
+5. 如果有违规 → 自动优化（handle_violation()）
+   ↓
+6. 如果优化失败 → 建议人工拆分原子
+```
+
+### 16.8 代码示例
+
+**完整流程示例**：
+
+```python
+from manim import *
+from layout.scene_base import LayoutScene
+from layout.engine import LayoutEngine
+from layout.constants import ZoneConstants
+
+class OptimizationDemo(LayoutScene):
+    def construct(self):
+        # 1. 决策布局（基于静态预估）
+        content_count = 10
+        has_graphics = True
+        layout_decision = LayoutEngine.decide(
+            content_count=content_count,
+            has_graphics=has_graphics,
+            has_multirow_formulas=True
+        )
+
+        # 2. 创建内容
+        texts = [Text(f"Line {i} - 这是一段较长的文本内容") for i in range(10)]
+        all_mobjects = VGroup(*texts)
+
+        # 3. 放置内容（根据决策的布局模式）
+        if layout_decision.mode == LayoutMode.TWO_COLUMN:
+            group = self.place_two_column(left_content=texts[0:5], right_content=texts[5:10])
+        else:
+            group = self.place_in_main_zone(all_mobjects, layout_mode="vertical")
+
+        # 4. 验证布局
+        violations = self.validate_layout(list(all_mobjects))
+
+        # 5. 自动优化（如有违规）
+        if violations:
+            # 实测内容尺寸（用于调试）
+            width, height = LayoutEngine.measure_content_dims(all_mobjects)
+            print(f"实测宽度={width:.2f}, 高度={height:.2f}")
+
+            # 自动处理违规
+            result = self.handle_violation(violations, list(all_mobjects))
+            if result and not result.success:
+                print(f"优化失败，建议人工干预")
+```
 
 ### 坐标参考系的样式
 
