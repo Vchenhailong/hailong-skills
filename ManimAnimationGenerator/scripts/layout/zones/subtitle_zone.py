@@ -96,8 +96,15 @@ class SubtitleZone(ZoneBase):
                 Text(line, font_size=font_size, color=ZC.SUBTITLE_TEXT_COLOR)
                 for line in lines
             ]
+
+            # 统一改用 SubtitleScroller 的算法，保持两个组件行间距一致。
             measured_line_height = Text("测试", font_size=font_size).height
-            line_spacing = measured_line_height * ZC.SUBTITLE_LINE_SPACING_RATIO * 0.4
+            # 与 SubtitleScroller._calc_line_height 一致：
+            # line_height = font_size/72 * SUBTITLE_LINE_HEIGHT_RATIO (1.4)
+            computed_line_height = (font_size / 72.0) * ZC.SUBTITLE_LINE_HEIGHT_RATIO
+            # 取 measured 与 computed 的最大值，兼容不同字体度量
+            effective_line_height = max(measured_line_height, computed_line_height)
+            line_spacing = effective_line_height * ZC.SUBTITLE_LINE_SPACING_RATIO
             text_group = VGroup(*text_mobjects).arrange(DOWN, buff=line_spacing)
         else:
             text_group = text
@@ -124,18 +131,8 @@ class SubtitleZone(ZoneBase):
 
         subtitle_group = VGroup(bg, text_group)
 
-        # 修复 P0-5：原代码
-        #   subtitle_group.move_to(ORIGIN).align_to(ORIGIN, DOWN).shift(DOWN * abs(Y))
-        #   subtitle_group.align_to(ORIGIN, LEFT + RIGHT)
-        # 第一个 align_to(ORIGIN, DOWN) 的第一个参数是 mobject，传 ORIGIN 点是错误的；
-        # 第二个 align_to(ORIGIN, LEFT+RIGHT) 同理。
-        # 正确做法：直接用 set_y / set_x 设定绝对位置（依赖 ZC 中的固定值，
-        # 符合"字幕底部固定"红线约束），并保留上界约束防侵入主内容区。
-        # 水平居中
         subtitle_group.set_x(0)
-        # 底部固定到 SUBTITLE_ZONE_BOTTOM_FIXED_Y（防抖动）
-        # subtitle_group.height/2 是其中心到顶/底的距离
-        # 实际是 center.y = bottom_fixed_y + subtitle_group.height/2
+
         subtitle_group.set_y(
             ZC.SUBTITLE_ZONE_BOTTOM_FIXED_Y + subtitle_group.height / 2
         )

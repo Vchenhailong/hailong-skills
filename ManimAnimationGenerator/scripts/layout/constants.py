@@ -25,11 +25,8 @@ class ZoneConstants:
     # ============================================================
 
     # 安全区边距（占窗口的比例）
-    # 修复 P0-N9：原 MARGIN_RATIO_X=0.05 导致 safe_w=12.798，与静态常量
-    # 隐含的 13.5 安全区宽度不符，进而让 compute_column_layout 返回的
-    # 分栏边界与 GRAPHICS_X_MIN=1.85 / THREE_COL_MID_X_MIN=-1.7 等静态
-    # 常量产生 0.07~0.36 单位的偏差，触发 validate_layout 假阳性违规。
-    # 修正为 0.0253 后，safe_w ≈ 13.5，与静态常量完全对齐：
+    # MARGIN_RATIO_X 选 0.0253 使 safe_w ≈ 13.5，与静态常量隐含的
+    # 安全区宽度严格对齐（否则 validate_layout 会假阳性越界）：
     #   -6.75 = -14.22/2 + 14.22*0.0253 ✓
     #   safe_w = 14.22 - 14.22*2*0.0253 = 13.50 ✓
     #   two_col_left_x_max = -6.75 + 13.5*0.6 = 1.35 (vs MAIN_CONTENT_TWO_COL_X_MAX=1.35) ✓
@@ -42,9 +39,9 @@ class ZoneConstants:
     # 各区域高度比例（占安全区高度的比例）
     TITLE_RATIO = 0.20  # 标题区占安全区的 2/10
     SUBTITLE_RATIO = 0.10  # 字幕区占安全区的 1/10
-    # 修复 P0-N6：原 ZONE_SPACING=0.30 与 layout.md 第 4.3 节"栏间至少 0.5"
-    # 冲突，且与静态常量 GRAPHICS_X_MIN=1.85 / TWO_COL_X_MAX=1.35 隐含的 0.5
-    # 间距不一致。统一为 0.5 后，compute() 动态计算与静态常量边界完全对齐：
+    # ZONE_SPACING = 0.5 与 layout.md 第 4.3 节"栏间至少 0.5" 一致，
+    # 与静态常量 GRAPHICS_X_MIN=1.85 / TWO_COL_X_MAX=1.35 隐含的 0.5
+    # 间距也对齐。compute() 动态计算与静态常量边界完全对齐：
     #   two_col_left_x_max = -6.75 + 13.5 * 0.6 = 1.35
     #   two_col_right_x_min = 1.35 + 0.5 = 1.85  ← 与 GRAPHICS_X_MIN 一致
     #   three_mid_x_min = -2.2 + 0.5 = -1.7      ← 与 THREE_COL_MID_X_MIN 一致
@@ -52,13 +49,7 @@ class ZoneConstants:
     ZONE_SPACING = 0.5  # 区域垂直间距 & 分栏水平间距（与 layout.md 一致）
 
     # 分栏水平比例
-    # 修复 P0-N10：原 (0.30, 0.30, 0.40) 在 ZONE_SPACING=0.5 时输出
-    #   left_x_max = -6.75 + 13.5*0.3 = -2.70
-    #   mid_x_min = -2.70 + 0.5 = -2.20
-    #   mid_x_max = -2.20 + 13.5*0.3 = 1.85
-    #   right_x_min = 1.85 + 0.5 = 2.35
-    # 与静态常量 (-2.2, -1.7, 2.35, 2.85) 错位 0.5 单位。
-    # 静态常量是基于"左 0.337/中 0.30/右 0.363"反推得到的手算值。
+    # THREE_COL_RATIOS 由静态常量反推：(0.337, 0.30, 0.363)
     # 调整比例使其与静态常量精确对齐：
     #   left_x_max = -6.75 + 13.5*0.337 = -2.20 ✓
     #   mid_x_min  = -2.20 + 0.5       = -1.70 ✓
@@ -125,11 +116,11 @@ class ZoneConstants:
     )  # 字幕区右边界（与安全区右边界一致，确保底衬不越界）
     SUBTITLE_LINE_SPACING_RATIO = 0.6  # 字幕行间距系数（相对于 font_size）
     SUBTITLE_LINE_HEIGHT_RATIO = 1.4  # 字幕行高系数（font_size → 实际行高的倍率）
-    # 修复 P0-N4：原 MANIM_FONT_TO_UNIT_RATIO = 8/72 ≈ 0.111 被误用于行高计算，
-    # 导致实际行高只有正确值的 1/8。Manim 默认 1 单位 = 1 inch = 72 points，
-    # font_size 本身就是 points，font_size/72 才是正确换算系数。
+    # 字体大小到 Manim 单位的换算系数：
+    # Manim 默认 1 单位 = 1 inch = 72 points，font_size 本身就是 points，
+    # 因此 font_size/72 才是正确换算系数。
     # 保留本常量仅为兼容遗留引用，新代码请直接使用 font_size / 72.0 计算。
-    MANIM_FONT_TO_UNIT_RATIO = 1.0  # 字体大小到 Manim 单位的换算系数（已修正，不再产生 8x 误差）
+    MANIM_FONT_TO_UNIT_RATIO = 1.0  # 字体大小到 Manim 单位的换算系数
 
     # 兼容性别名
     SUBTITLE_FONT_SIZE = FONT_SIZE_SUBTITLE_TEXT  # 兼容旧代码
@@ -564,8 +555,7 @@ class ZoneConstants:
         """
         获取指定栏位的对齐方向。
 
-        对齐规则（修复 P1-N4：原版对两栏/三栏的 index=1 都返回 "RIGHT"，
-        违反 layout.md 第 10.5.1 节"三栏中栏 LEFT 对齐"的规则）：
+        对齐规则（遵循 layout.md 第 10.5.1 节"三栏中栏 LEFT 对齐"）：
 
         - 三栏左栏（num_columns=3, index=0）：LEFT
         - 三栏中栏（num_columns=3, index=1）：LEFT  （靠中栏左边界）
@@ -632,10 +622,10 @@ class ZoneConstants:
         2. 计算锚点坐标
         3. 将 mobject 水平移动到锚点
 
-        修复 P0-N1：原实现 ``move_to(mobject.get_center().set_x(anchor_x), RIGHT/LEFT)``
-        中 X 维度上 ``get_center().set_x(anchor_x)`` 把目标点设到对象当前 center.x，
-        再以 RIGHT/LEFT 边对齐 → X 维度完全 no-op，无论 LEFT/RIGHT 都没移动。
-        现在显式计算"使目标边对齐 anchor_x"的 center 坐标，再 move_to 该中心。
+        实现要点：显式计算"使目标边对齐 anchor_x"的 center 坐标，
+        再 move_to 该中心。注意 X 维度上若用 ``get_center().set_x(anchor_x)``
+        会把目标点设到对象当前 center.x，再以 RIGHT/LEFT 边对齐，
+        X 维度会完全 no-op，LEFT/RIGHT 都无效。
 
         示例（三栏中栏内容左对齐）::
 

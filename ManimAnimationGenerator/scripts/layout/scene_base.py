@@ -130,11 +130,17 @@ class LayoutScene(Scene):
     # ============================================================
 
     def get_subtitle_zone(self, debug: Optional[bool] = None) -> SubtitleZone:
-        """获取字幕区容器（懒加载）"""
+        """获取字幕区容器（懒加载）
+
+        字幕区容器创建后会立即把自身加入 scene（容器 Rectangle 在
+        debug 模式可见，非 debug 模式透明，不影响渲染）。
+        这样 scene.mobjects 持有字幕区的引用，便于后续统一管理
+        （清理、状态查询、跨场景复用等）。
+        """
         if self._subtitle_zone is None:
             dbg = debug if debug is not None else self.debug
-            # 修复：SubtitleZone 构造时需要 scene 参数（用于 play/remove 操作）
             self._subtitle_zone = SubtitleZone(scene=self, debug=dbg)
+            self.add(self._subtitle_zone)
         return self._subtitle_zone
 
     def get_main_content_zone(
@@ -172,7 +178,10 @@ class LayoutScene(Scene):
         content: Union[Mobject, VGroup],
         layout_mode: str = "vertical",
     ) -> VGroup:
-        """将内容放置在主内容区内（仅使用 arrange + zone.place_content）
+        """将内容放置在主内容区内（arrange + 预检 + zone.place_content）
+
+        预检步骤确保单个子元素超宽时自动换行/缩放，
+        避免与 place_two_column 行为不一致。
 
         Args:
             content: 单个元素或元素组
@@ -185,6 +194,13 @@ class LayoutScene(Scene):
             content = VGroup(content)
 
         zone = self.get_main_content_zone(layout_mode)
+        col_width = zone.x_max - zone.x_min
+        col_height = zone.y_max - zone.y_min
+
+        # 与 place_two_column/place_three_column 一致：先预检再 place
+        content = self._precheck_mobject(
+            content, max_width=col_width * 0.95, max_height=col_height * 0.9
+        )
 
         if layout_mode == "centered":
             content.arrange(DOWN, buff=ZoneConstants.ROW_BUFF, center=True)
@@ -194,7 +210,7 @@ class LayoutScene(Scene):
         return zone.place_content(content)
 
     def place_graphics(self, graphics: Mobject) -> Mobject:
-        """将图形放置在图形区中心
+        """将图形放置在图形区中心（含预检缩放）
 
         Args:
             graphics: 图形对象
@@ -203,6 +219,11 @@ class LayoutScene(Scene):
             已定位的图形对象
         """
         zone = self.get_graphics_zone()
+        col_width = zone.x_max - zone.x_min
+        col_height = zone.y_max - zone.y_min
+        graphics = self._precheck_mobject(
+            graphics, max_width=col_width * 0.95, max_height=col_height * 0.9
+        )
         return zone.place_content(graphics)
 
     def place_two_column(
@@ -256,15 +277,12 @@ class LayoutScene(Scene):
         )
         right_group = right_zone.place_content(right_group, h_align="right")
 
-        # 修复 P0-B：两栏顶部对齐 + 边界校验。
-        # 原实现仅将两栏上移到最高栏顶部位置，未校验对齐后是否仍完全
-        # 在 zone 内。当任一栏高度 > zone 高度时，顶部对齐后底部会越界
-        # （content_top 在 zone_y_max 但 content_bottom 超出 zone_y_min）。
-        # 现改为先尝试顶部对齐，对齐后立即校验，若越界则降级到居中/底部对齐。
-        # 修复 MUST-1：zone_y_min / zone_y_max 语义对称（取最严格边界）。
+        # 两栏顶部对齐 + 边界校验。
+        # 对齐后立即校验 top_overflow / bottom_overflow，越界则降级到
+        # 居中/底部对齐。
+        # zone_y_min / zone_y_max 语义对称（取最严格边界）。
         # 最严格下界 = max(zones.y_min)（各栏中最深的底部）
         # 最严格上界 = min(zones.y_max)（各栏中最浅的顶部）
-        # 原 min() 误用为"最宽松下界"，会在 zone 高度不同时引发底部越界漏检。
         zone_y_min = max(left_zone.y_min, right_zone.y_min)
         zone_y_max = min(left_zone.y_max, right_zone.y_max)
         self._align_columns_within_zone(
@@ -279,16 +297,15 @@ class LayoutScene(Scene):
 
         # ── 事后校验：放置后必须校验，溢出时自动走优化链 ──
         all_placed = [left_group, right_group]
-        # 修复 P0-1：union 校验改用 region="safe_area"（全局安全区），
-        # 之前 region="content" 实际是单栏边界，与多栏布局脱节，
-        # 导致多栏内整体溢出/穿栏越界无法被捕获。
-        # 同时透传 column_layout，确保动态分栏边界优先于静态常量。
+        # union 校验改用 region="safe_area"（全局安全区），
+        # 与多栏布局语义保持一致；同时透传 column_layout，
+        # 确保动态分栏边界优先于静态常量。
         zones = ZoneConstants.compute(self.camera.frame_width, self.camera.frame_height)
         col_layout_list = ZoneConstants.compute_column_layout(
             zones, num_columns=2, has_graphics=True
         )
-        # 修复 S-1：显式构造覆盖全宽的 dict（而非 col_layout_list[0]），
-        # 让 union 校验的语义明确为"全局安全区"而非"左栏"。
+        # 显式构造覆盖全宽的 dict，让 union 校验的语义明确为
+        # "全局安全区"而非"左栏"。
         col_layout_for_union = {
             "x_min": ZoneConstants.SAFE_AREA_X_MIN,
             "x_max": ZoneConstants.SAFE_AREA_X_MAX,
@@ -309,7 +326,7 @@ class LayoutScene(Scene):
                     "[place_two_column] 自动优化失败，建议拆分原子或缩小内容"
                 )
 
-        # ── 修复 P0-N2：按栏二次校验 ──
+        # 按栏二次校验：
         # 上面 union 校验对单栏内部 "不超出本栏" 不敏感（X 边界跨度大）。
         # 这里用每栏各自的 X 边界再校验一次，捕获"左栏内容溢出到右栏"等穿栏越界。
         per_col_violations: list = []
@@ -317,14 +334,14 @@ class LayoutScene(Scene):
             self.validate_layout(
                 [left_group],
                 region="content_two_col_left",
-                column_layout=col_layout_list,  # 传整段 list（修复：原 col_layout_list[0] 是 dict，无法按 idx 取）
+                column_layout=col_layout_list,
             )
         )
         per_col_violations.extend(
             self.validate_layout(
                 [right_group],
                 region="content_two_col_right",
-                column_layout=col_layout_list,  # 同上
+                column_layout=col_layout_list,
             )
         )
         if per_col_violations:
@@ -332,17 +349,16 @@ class LayoutScene(Scene):
                 f"[place_two_column] 按栏校验发现 {len(per_col_violations)} 项违规，"
                 "尝试自动优化"
             )
-            # 修复 S-2：传整段 col_layout_list 而非 [-1] 单个，
-            # 避免优化器只针对中栏做缩放而丢失对左/右栏违规的处理能力。
+            # 传整段 col_layout_list，避免优化器只针对中栏做缩放
+            # 而丢失对左/右栏违规的处理能力。
             self.handle_violation(
                 per_col_violations, all_placed, column_layout=col_layout_list
             )
 
-        # 修复 N0-1：place_two_column 必须递归把 result 及其子对象 add 到场景中。
-        # 之前仅 `self.add(result)` 但 result 是 VGroup(VGroup, VGroup) 嵌套结构，
-        # VGroup 不会自动 add submobjects 到 scene，导致 VGroup 自身渲染为空、
-        # 主内容区不显示（仅字幕可见）。
-        # 修复后递归展平 add 所有子对象，确保 manim 渲染时能正确遍历。
+        # place_two_column 必须递归把 result 及其子对象 add 到场景中。
+        # VGroup 不会自动 add submobjects 到 scene，
+        # 必须显式 add 才能渲染（仅 `self.add(result)` 会导致嵌套
+        # VGroup 渲染为空、主内容区不显示）。
         self._add_recursive(result)
         return result
 
@@ -371,12 +387,9 @@ class LayoutScene(Scene):
         超限时自动换行（文本）或缩放（图形）。中栏保留原有的
         scale-to-fit 作为第二道防线。
 
-        修复 P0-E：原实现三栏内容都用 main_zone（覆盖左+中两栏的宽区域）做
-        place_content 兜底缩放。当任一栏（如中栏 MathTex）超宽触发缩放时，
-        main_zone 缩放会波及到 left_col（在同一 main_zone 内），导致左栏
-        文本字号被缩到看不见。
-        现改为：每栏独立缩放 + 独立定位到各自 X 边界，不共用 main_zone
-        作为缩放参考系。
+        每栏独立缩放 + 独立定位到各自 X 边界，不共用 main_zone
+        作为缩放参考系。任一栏超宽触发 main_zone 缩放会波及同 main_zone
+        内其他栏，导致其他栏字号被缩到看不见。
 
         Args:
             left_content: 左栏内容（步骤说明/概念）
@@ -390,7 +403,7 @@ class LayoutScene(Scene):
         main_zone = self.get_main_content_zone(layout_mode="three_column")
         right_zone = self.get_graphics_zone()
 
-        # 计算各栏可用尺寸（修复 P0-E：使用各栏独立的静态常量边界，不再用 main_zone 兜底）
+        # 计算各栏可用尺寸（使用各栏独立的静态常量边界，不复用 main_zone 兜底）
         main_width = main_zone.x_max - main_zone.x_min
         main_height = main_zone.y_max - main_zone.y_min
 
@@ -406,76 +419,51 @@ class LayoutScene(Scene):
         right_col_width = right_zone.x_max - right_zone.x_min
         right_col_height = right_zone.y_max - right_zone.y_min
 
-        # ── 事前预检：三栏独立处理（修复 P0-E：每栏用自己的边界，不再共用 main_zone）──
-        left_content = self._precheck_mobject(
-            left_content, max_width=left_col_width * 0.92, max_height=main_height * 0.9
-        )
-        mid_content = self._precheck_mobject(
-            mid_content, max_width=mid_col_width * 0.92, max_height=main_height * 0.9
-        )
-        right_content = self._precheck_mobject(
-            right_content,
-            max_width=right_col_width * 0.95,
-            max_height=right_col_height * 0.9,
-        )
-
-        # ── 修复 P0-E：三栏独立放置（每栏用自己的 X 边界定位）──
-        # 左栏：左对齐到 THREE_COL_LEFT_X_MIN
+        # 三栏独立预检 + 独立放置，每栏用自己的 X 边界：
+        # - 左/中栏：左对齐到各自的 x_min
+        # - 右栏：右对齐到 graphics_zone 的 x_max
+        # 缩放以本栏 VGroup 中心为锚点（保持 X 不偏移），
+        # move_to 再用缩放后的 width 重新计算左/右对齐坐标。
         left_col = VGroup(left_content).arrange(
             DOWN, buff=ZoneConstants.ROW_BUFF * 0.8, aligned_edge=LEFT
         )
-        # 左栏独立防超宽缩放（仅在 left_col 实际超过 left_col_width 时触发）
-        # 修复 P0-E：使用 about_point=left_col.get_center() 保持中心位置不变
         if left_col.width > left_col_width:
             scale_factor = (left_col_width * 0.95) / left_col.width
             if scale_factor < 1.0:
                 left_col.scale(scale_factor, about_point=left_col.get_center())
-                logging.info(
-                    f"[place_three_column] 左栏独立缩放: ×{scale_factor:.2f} "
-                    f"(left_col_width={left_col_width:.2f}, "
-                    f"content_width={left_col.width:.2f})"
-                )
-        # 左对齐到左栏左边界
+                logging.info(f"[place_three_column] 左栏独立缩放: ×{scale_factor:.2f}")
         left_col.move_to([left_x_min + left_col.width / 2, main_zone.center_y, 0])
 
-        # 中栏：左对齐到 THREE_COL_MID_X_MIN
         mid_col = VGroup(mid_content).arrange(
             DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=LEFT
         )
-        # 中栏独立防超宽缩放
         if mid_col.width > mid_col_width:
             scale_factor = (mid_col_width * 0.95) / mid_col.width
             if scale_factor < 1.0:
                 mid_col.scale(scale_factor, about_point=mid_col.get_center())
-                logging.info(
-                    f"[place_three_column] 中栏独立缩放: ×{scale_factor:.2f} "
-                    f"(mid_col_width={mid_col_width:.2f}, "
-                    f"content_width={mid_col.width:.2f})"
-                )
-        # 中栏左对齐到中栏左边界
+                logging.info(f"[place_three_column] 中栏独立缩放: ×{scale_factor:.2f}")
         mid_col.move_to([mid_x_min + mid_col.width / 2, main_zone.center_y, 0])
 
-        # 右栏：右对齐到右栏右边界（在 graphics_zone 内）
-        right_col = VGroup(right_content).arrange(
-            DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=RIGHT
+        right_col = (
+            VGroup(right_content).arrange(
+                DOWN, buff=ZoneConstants.ROW_BUFF, aligned_right=ZoneConstants.ROW_BUFF
+            )
+            if False
+            else VGroup(right_content).arrange(
+                DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=RIGHT
+            )
         )
-        # 右栏独立防超宽缩放（仅在 right_col 实际超过 right_col_width 时触发）
         if right_col.width > right_col_width:
             scale_factor = (right_col_width * 0.95) / right_col.width
             if scale_factor < 1.0:
                 right_col.scale(scale_factor, about_point=right_col.get_center())
-                logging.info(
-                    f"[place_three_column] 右栏独立缩放: ×{scale_factor:.2f} "
-                    f"(right_col_width={right_col_width:.2f}, "
-                    f"content_width={right_col.width:.2f})"
-                )
+                logging.info(f"[place_three_column] 右栏独立缩放: ×{scale_factor:.2f}")
         right_col = right_zone.place_content(right_col, h_align="right")
 
-        # 修复 P0-B：三栏顶部对齐 + 边界校验。
+        # 三栏顶部对齐 + 边界校验。
         # 与 place_two_column 同样的修复：原顶部对齐未校验对齐后是否完全
-        # 在 zone 内。现改为先尝试顶部对齐，越界则降级到居中/底部对齐。
-        # 修复 MUST-1：zone_y_min / zone_y_max 语义对称（取最严格边界）。
-        # 最严格下界 = max(zones.y_min)，最严格上界 = min(zones.y_max)。
+        # 在 zone 内。改为先尝试顶部对齐，越界则降级到居中/底部对齐。
+        # zone_y_min / zone_y_max 语义对称（取最严格边界）。
         zone_y_min = max(main_zone.y_min, right_zone.y_min)
         zone_y_max = min(main_zone.y_max, right_zone.y_max)
         self._align_columns_within_zone(
@@ -485,23 +473,22 @@ class LayoutScene(Scene):
             prefer="top",
         )
 
-        # 修复 P1-7：与 place_two_column 保持一致，末尾添加事后校验
-        # 修复 P0-1 / P0-2：union 校验改用 region="safe_area"（全局安全区），
-        # 同时调整校验顺序为 per-col → union：先按栏捕捉穿栏越界，
-        # 再做整体 union 校验，避免 union 误报先污染导致按栏校验被跳过。
+        # 与 place_two_column 保持一致，末尾添加事后校验。
+        # 校验顺序：先按栏捕捉穿栏越界，再做整体 union 校验，
+        # 避免 union 误报先污染导致按栏校验被跳过。
         all_placed = [left_col, mid_col, right_col]
         zones = ZoneConstants.compute(self.camera.frame_width, self.camera.frame_height)
         col_layout_list = ZoneConstants.compute_column_layout(
             zones, num_columns=3, has_graphics=True
         )
 
-        # ── 修复 P0-2：先做按栏校验（per-col），更精确捕获穿栏越界 ──
+        # 先做按栏校验（per-col），更精确捕获穿栏越界
         per_col_violations: list = []
         per_col_violations.extend(
             self.validate_layout(
                 [left_col],
                 region="content_three_col_left",
-                column_layout=col_layout_list,  # 传整段 list（修复：原 col_layout_list[0] 是 dict，无法按 idx 取）
+                column_layout=col_layout_list,
             )
         )
         per_col_violations.extend(
@@ -523,17 +510,16 @@ class LayoutScene(Scene):
                 f"[place_three_column] 按栏校验发现 {len(per_col_violations)} 项违规，"
                 "尝试自动优化"
             )
-            # 修复 S-2：原 col_layout_list[-1] 只传中栏，会让优化器丢失
-            # 对左/右栏违规的处理能力。优化器 optimize() 期望接受 List[Dict]
-            # （整段三栏布局），可针对不同违规匹配对应栏位做缩放。
+            # 优化器 optimize() 期望接受 List[Dict]（整段三栏布局），
+            # 可针对不同违规匹配对应栏位做缩放。
             self.handle_violation(
                 per_col_violations, all_placed, column_layout=col_layout_list
             )
 
-        # ── 修复 P0-1：union 校验使用 safe_area（全局安全区） ──
+        # union 校验使用 safe_area（全局安全区）：
         # union 校验对单栏内部"不超出本栏"不敏感，但能捕获整体越出安全区。
-        # 修复 S-1：显式构造覆盖全宽的 dict（而非 col_layout_list[0] 让人误以为
-        # 只是左栏），让 union 校验的语义明确为"全局安全区"而非"左栏"。
+        # 显式构造覆盖全宽的 dict，让 union 校验的语义明确为
+        # "全局安全区"而非"左栏"。
         col_layout_for_union = {
             "x_min": ZoneConstants.SAFE_AREA_X_MIN,
             "x_max": ZoneConstants.SAFE_AREA_X_MAX,
@@ -553,7 +539,7 @@ class LayoutScene(Scene):
                     "[place_three_column] 自动优化失败，建议拆分原子或缩小内容"
                 )
 
-        # 修复 N0-2：place_three_column 同样必须递归 add 才能渲染嵌套 VGroup。
+        # place_three_column 同样必须递归 add 才能渲染嵌套 VGroup。
         result = VGroup(left_col, mid_col, right_col)
         self._add_recursive(result)
         return result
@@ -563,13 +549,18 @@ class LayoutScene(Scene):
 
         根据 layout.md 第 7 节，当元素超出安全边界时整体移动或缩放。
 
-        修复 P0-6：原实现用两个独立 if 写 shift_y/shift_x，后写的会覆盖前写的，
-        导致同时超出上下界时只处理了一个。这里分别记录下界（向上 shift）
-        和上界（向下 shift），最终对 x/y 各取一个合并的 shift 量。
+        处理顺序（先缩放，再位移，最后兜底二次校验）：
+        1. **先缩放**：若内容尺寸（width/height）任一维度超出安全区，
+           按比例缩放至 95% 边界内。这一步保证缩放后 content 必然能 fit，
+           数学上消除了"同一轴向两端同时越界"的可能性
+           （证明：若 content.height ≤ 0.95*safe_h，则 top-bottom ≤ 0.95*safe_h
+            < safe_h，所以 top 和 bottom 不会同时超出 safe_y_min/max）
+        2. **再位移**：对每个方向独立计算 shift 量，最后取较大绝对值方向
+           作为净 shift。这避免了单一变量后写覆盖前写导致一方向被忽略。
 
-        修复 P0-4：当内容尺寸本身已超出安全区时，单纯 shift 无法 fit，
+        若内容尺寸本身已超出安全区，单纯 shift 无法 fit，
         必须先按比例 scale 到安全区的 95% 边界内再 shift。
-        同时将变量名改为无歧义命名（shift_top_to_y_max / shift_bottom_to_y_min），
+        变量名采用无歧义命名（shift_top_to_y_max / shift_bottom_to_y_min），
         避免 up/down 含义混淆（down 在此上下文中是负值）。
         """
         safe_x_min = ZoneConstants.SAFE_AREA_X_MIN
@@ -579,8 +570,10 @@ class LayoutScene(Scene):
         safe_w = safe_x_max - safe_x_min
         safe_h = safe_y_max - safe_y_min
 
-        # 修复 P0-4：先检测内容尺寸是否超过安全区，超过则先按比例 scale 到 95% 边界内
-        # 单纯 shift 无法 fit 这种 case。
+        # 步骤 1：先缩放
+        # 检测内容尺寸是否超过安全区，超过则先按比例 scale 到 95% 边界内。
+        # 这一步是消除"双端越界"的关键：缩放后 height ≤ 0.95*safe_h，
+        # 几何上保证了 top - bottom < safe_h，shift 阶段只需处理单端越界。
         obj_w = mobject.width
         obj_h = mobject.height
         if obj_w > safe_w or obj_h > safe_h:
@@ -593,13 +586,15 @@ class LayoutScene(Scene):
                     f"[safe_place] 内容尺寸超安全区，先缩放至 95% 边界: "
                     f"×{scale_factor:.3f} (原始 w={obj_w:.2f} h={obj_h:.2f})"
                 )
+                # 缩放后重新读取尺寸与位置（scale 会改变 get_width/height/get_*_edge）
+                obj_w = mobject.width
+                obj_h = mobject.height
 
         bottom = mobject.get_bottom()[1]
         top = mobject.get_top()[1]
         left = mobject.get_left()[0]
         right = mobject.get_right()[0]
 
-        # 修复 P0-4：变量名改为无歧义命名，
         # "shift_*_to_*" 明确表示把 * 边移到 * 目标 Y/X 坐标。
         # shift_bottom_to_y_min > 0 表示把底边向上移到安全下界（正向上）
         # shift_top_to_y_max    < 0 表示把顶边向下移到安全上界（负向上）
@@ -610,6 +605,7 @@ class LayoutScene(Scene):
             0.0  # 把内容右边缘对齐到安全右界所需的 X 位移（向左为负）
         )
 
+        # 步骤 2：再位移
         # 下界：内容底部低于安全下界 → 向上 shift（数值为正）
         if bottom < safe_y_min:
             shift_bottom_to_y_min = safe_y_min - bottom
@@ -624,15 +620,25 @@ class LayoutScene(Scene):
             shift_right_to_x_max = safe_x_max - right
 
         # 综合 X / Y 的方向，叠加 shift（极端情况下上下同时越界时取较大约束）
-        # 修复 P0-4：用无歧义变量名 + 重新计算后变量符号已确定
+        # 用无歧义变量名 + 重新计算后变量符号已确定
         # shift_bottom_to_y_min 必为非负，shift_top_to_y_max 必为非正
         # 两者方向相反，简单相加取综合净 shift（极端双越界时取较大绝对值一侧）
+        #
+        # 理论上经过步骤 1 缩放后，content.height ≤ 0.95*safe_h，
+        # 数学上 top 和 bottom 不可能同时越界（参见函数顶部 docstring 证明）。
+        # 但作为防御性编程，仍保留"双端越界时取较大绝对值"的逻辑。
+        # 若双端越界确实发生（如 obj_h=0 边界情况），
+        # 在 shift 之后再做一次边界检查，必要时再缩放一次作为兜底。
         if shift_bottom_to_y_min != 0.0 and shift_top_to_y_max != 0.0:
             # 同时越上下界：取绝对值较大方向作为净 shift
             if abs(shift_bottom_to_y_min) >= abs(shift_top_to_y_max):
                 shift_y = shift_bottom_to_y_min
             else:
                 shift_y = shift_top_to_y_max
+            logging.warning(
+                f"[safe_place] 异常：双端 Y 越界同时发生 "
+                f"(bottom={bottom:.2f} top={top:.2f} safe=[{safe_y_min}, {safe_y_max}])"
+            )
         elif shift_bottom_to_y_min != 0.0:
             shift_y = shift_bottom_to_y_min
         else:
@@ -643,6 +649,10 @@ class LayoutScene(Scene):
                 shift_x = shift_left_to_x_min
             else:
                 shift_x = shift_right_to_x_max
+            logging.warning(
+                f"[safe_place] 异常：双端 X 越界同时发生 "
+                f"(left={left:.2f} right={right:.2f} safe=[{safe_x_min}, {safe_x_max}])"
+            )
         elif shift_left_to_x_min != 0.0:
             shift_x = shift_left_to_x_min
         else:
@@ -650,6 +660,48 @@ class LayoutScene(Scene):
 
         if shift_x != 0.0 or shift_y != 0.0:
             mobject.shift(RIGHT * shift_x + UP * shift_y)
+
+        # 兜底二次校验。shift 后再次测量边缘，
+        # 若仍有越界（极端情况如初始 obj_h=0 导致缩放未触发），
+        # 再做一次 scale 强制适配。这是最后一道防线。
+        bottom = mobject.get_bottom()[1]
+        top = mobject.get_top()[1]
+        left = mobject.get_left()[0]
+        right = mobject.get_right()[0]
+        if (
+            bottom < safe_y_min
+            or top > safe_y_max
+            or left < safe_x_min
+            or right > safe_x_max
+        ):
+            obj_w = mobject.width
+            obj_h = mobject.height
+            scale_x = (safe_w * 0.95) / obj_w if obj_w > safe_w else 1.0
+            scale_y = (safe_h * 0.95) / obj_h if obj_h > safe_h else 1.0
+            scale_factor = min(scale_x, scale_y, 1.0)
+            if scale_factor < 1.0:
+                mobject.scale(scale_factor, about_point=mobject.get_center())
+                logging.warning(
+                    f"[safe_place] 兜底二次缩放: ×{scale_factor:.3f} "
+                    f"(shift 后仍越界)"
+                )
+                # 二次缩放后再次尝试 shift（缩放后位置可能微偏）
+                bottom = mobject.get_bottom()[1]
+                top = mobject.get_top()[1]
+                left = mobject.get_left()[0]
+                right = mobject.get_right()[0]
+                shift_y2 = 0.0
+                shift_x2 = 0.0
+                if bottom < safe_y_min:
+                    shift_y2 = safe_y_min - bottom
+                elif top > safe_y_max:
+                    shift_y2 = safe_y_max - top
+                if left < safe_x_min:
+                    shift_x2 = safe_x_min - left
+                elif right > safe_x_max:
+                    shift_x2 = safe_x_max - right
+                if shift_x2 != 0.0 or shift_y2 != 0.0:
+                    mobject.shift(RIGHT * shift_x2 + UP * shift_y2)
 
         return mobject
 
@@ -660,12 +712,7 @@ class LayoutScene(Scene):
         zone_y_max: float,
         prefer: str = "top",
     ) -> str:
-        """多栏顶部对齐 + 边界校验（修复 P0-B）
-
-        修复 P0-B：原顶部对齐逻辑只把内容上移到最高栏顶部位置
-        （move_to(UP * (zone_y_max - content.height/2)) 风格），
-        没校验对齐后是否仍完全在 zone 内。当任一栏高度 > zone 高度时，
-        顶部对齐后底部会超出 zone_y_min（content 顶在 y_max 但底已过 y_min）。
+        """多栏顶部对齐 + 边界校验
 
         本函数实现"对齐后完全在 zone 内"的最优策略：
         1. 先尝试 prefer 指定的对齐方式（默认 top）
@@ -717,7 +764,7 @@ class LayoutScene(Scene):
                     shift_amount = bottom_y_target - c.get_bottom()[1]
                     c.shift(UP * shift_amount)
 
-            # 修复 P0-B：校验对齐后是否完全在 zone 内
+            # 校验对齐后是否完全在 zone 内
             top_overflow = max(c.get_top()[1] for c in columns) - zone_y_max
             bottom_overflow = zone_y_min - min(c.get_bottom()[1] for c in columns)
             # 1e-2 容差，避免浮点误差误判
@@ -740,7 +787,7 @@ class LayoutScene(Scene):
                 f"bottom_overflow={bottom_overflow:.2f}）"
             )
 
-        # 修复 P0-B：所有对齐方式都越界（内容本身已超出 zone 高度）
+        # 所有对齐方式都越界（内容本身已超出 zone 高度）
         # 兜底：按比例缩放到 zone 高度的 95% 后再顶部对齐
         highest_top = max(c.get_top()[1] for c in columns)
         lowest_bottom = min(c.get_bottom()[1] for c in columns)
@@ -787,13 +834,15 @@ class LayoutScene(Scene):
         Returns:
             调整后的 Mobject（可能被原地修改，也可能返回原对象）
         """
-        from manim import Text, MathTex
+        from manim import Text, MathTex, MarkupText
+
+        # Tex 覆盖 MathTex，但显式列出所有文本类便于维护。
+        # 任何含换行/缩放语义的文本对象都应在此注册。
+        _TEXT_TYPES = (Text, MarkupText, MathTex)
 
         # VGroup：递归处理子元素
         if isinstance(mobject, VGroup) and len(mobject.submobjects) > 0:
-            # 修复 P0-3：用 submobjects 列表切片赋值（mobject.submobjects[:] = ...）
-            # 替代直接覆盖属性 `mobject.submobjects = adjusted_submobjs`，
-            # 后者在部分 VGroup 实现中会丢失父对象属性（h_align、layout_mode、name 等）。
+
             adjusted_submobjs = []
             for sub in mobject.submobjects:
                 adjusted = self._precheck_mobject(sub, max_width, max_height)
@@ -801,7 +850,6 @@ class LayoutScene(Scene):
             # 保留 VGroup 引用：原位更新子对象列表，避免属性丢失
             mobject.submobjects[:] = adjusted_submobjs
 
-            # 修复 P0-3：递归后重新测量 VGroup 整体尺寸，
             # 整体仍超限时按比例 scale 一次（兜底第二道防线）
             current_w = mobject.width
             current_h = mobject.height
@@ -826,7 +874,7 @@ class LayoutScene(Scene):
             return mobject
 
         # 文本/公式对象：优先换行，其次缩放
-        if isinstance(mobject, (Text, MathTex)):
+        if isinstance(mobject, _TEXT_TYPES):
             # 先尝试换行
             fake_violation = {
                 "type": (
@@ -834,18 +882,14 @@ class LayoutScene(Scene):
                 ),
                 "column_width": max_width,
             }
-            optimizer = LayoutOptimizer()
-            wrapped = optimizer._apply_wrap([mobject], fake_violation)
+
+            wrapped = self._layout_optimizer._apply_wrap([mobject], fake_violation)
 
             if wrapped and mobject.width <= max_width and mobject.height <= max_height:
                 logging.info(f"[_precheck_mobject] 换行成功: {type(mobject).__name__}")
                 return mobject
 
             # 换行不够或失败，尝试整体缩放
-            # 修复 P0-3：
-            # - MathTex 优先走 _apply_wrap（已在上方尝试），不再依赖 font_size 属性
-            # - 对所有文本用 mobject.scale(...) 整体缩放，绕开 font_size 属性对
-            #   MathTex 失效的问题，并触发 Manim 内部重排
             scale_x = max_width / obj_width if obj_width > max_width else 1.0
             scale_y = max_height / obj_height if obj_height > max_height else 1.0
             scale_factor = min(scale_x, scale_y, 0.95)
@@ -853,13 +897,12 @@ class LayoutScene(Scene):
                 # 使用 about_point=mobject.get_center() 保持中心位置不变，
                 # 避免相对锚点导致位置偏移（与 _precheck_mobject 图形分支保持一致）
                 # 保留 95% 安全余量防再次越界
-                # 同时配合 min_font_size 保护（仅记录，不再依赖 font_size 属性）
                 min_size = LayoutOptimizer.MIN_FONT_SIZE
                 current_font = getattr(mobject, "font_size", 32)
                 if current_font * scale_factor < min_size:
                     scale_factor = min_size / max(current_font, 1)
                 mobject.scale(
-                    max(scale_factor, 0.5),
+                    scale_factor,
                     about_point=mobject.get_center(),
                 )
                 logging.info(
@@ -870,13 +913,11 @@ class LayoutScene(Scene):
                 return mobject
 
         # 图形类对象（非文本）：直接 scale_to_fit
-        is_graphic = not isinstance(mobject, (Text, MathTex))
+        is_graphic = not isinstance(mobject, _TEXT_TYPES)
         if is_graphic and (obj_width > max_width or obj_height > max_height):
             scale_x = max_width / obj_width if obj_width > max_width else 1.0
             scale_y = max_height / obj_height if obj_height > max_height else 1.0
             scale_factor = min(scale_x, scale_y, 1.0)
-            # 修复 P1-8：about_edge 不能传 ORIGIN（不是有效边标识），
-            # 改用 about_point=mobject.get_center()（与 arrange_content 一致）
             mobject.scale(scale_factor, about_point=mobject.get_center())
             logging.info(
                 f"[_precheck_mobject] 图形缩放: "
@@ -894,7 +935,7 @@ class LayoutScene(Scene):
         overlap_pairs: list = None,
         allowed_overlap_pairs: list = None,
         allowed_overlap_patterns: dict = None,
-        column_layout: Optional[Dict[str, Any]] = None,
+        column_layout: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
     ) -> list:
         """程序化布局校验（无需渲染），检测溢出/侵入/重叠/越界
 
@@ -959,11 +1000,14 @@ class LayoutScene(Scene):
         """
         violations = []
 
+        # column_layout 同时支持 Dict（单栏，union 校验）和 List[Dict]（多栏，per-col 校验）。
+        # 统一规整为 List[Dict]，避免后续 list-style 访问对 Dict 失效。
+        if isinstance(column_layout, dict):
+            column_layout = [column_layout]
+
         # ---- 根据 region 确定边界 ----
-        # 修复 P0-N2：原实现 region == "content" 一律使用单栏边界，
-        # 与多栏布局（两栏/三栏）脱节，导致左栏内容溢出到右栏区域无法被捕获。
-        # 现在扩展 region 取值，每种栏位用对应区域的精确 X 边界。
-        # 修复 P1-N1：多栏 region 在传入 column_layout 时优先使用动态边界，
+        # 扩展 region 取值，每种栏位用对应区域的精确 X 边界。
+        # 多栏 region 在传入 column_layout 时优先使用动态边界，
         # 避免静态常量与 compute_column_layout 计算结果不一致。
         _COLUMN_REGION_TO_INDEX = {
             "content_two_col_left": 0,
@@ -1032,7 +1076,7 @@ class LayoutScene(Scene):
             raise ValueError(f"未知区域: {region}")
 
         # 如果传入了动态 column_layout，覆盖多栏 region 的 X 边界
-        # 修复 P1-N1：动态列宽优先于静态常量，避免边界不一致
+        # 动态列宽优先于静态常量，避免边界不一致
         if column_layout and region in _COLUMN_REGION_TO_INDEX:
             idx = _COLUMN_REGION_TO_INDEX[region]
             if 0 <= idx < len(column_layout):
@@ -1189,7 +1233,7 @@ class LayoutScene(Scene):
             if (id(obj_a), id(obj_b)) in allowed_set:
                 continue  # 跳过，这是合法重叠
 
-            # 修复 P0-6：第 2 层 - 类型/名称模式自动豁免
+            # 第 2 层 - 类型/名称模式自动豁免
             # 命中 ALLOWED_PATTERNS（如 force_arrow_on_object 等）时，stroke 接触
             # 视为合法，跳过 ELEMENT_OVERLAP 检测。后续仍走精细化容差比较。
             pattern_matched = False
@@ -1208,7 +1252,7 @@ class LayoutScene(Scene):
             b_bottom, b_top = obj_b.get_bottom()[1], obj_b.get_top()[1]
             y_overlap = min(a_top, b_top) - max(a_bottom, b_bottom)
 
-            # 修复 P0-6：动态容差 = max(0.05, max(stroke_a, stroke_b) * 0.55)
+            # 动态容差 = max(0.05, max(stroke_a, stroke_b) * 0.55)
             # - 0.05 是 Manim 默认 stroke_width=4 / 72 ≈ 0.056 的安全下限
             # - 额外按对象的实际 stroke_width 加大容差（API 缺失时 try/except 兜底）
             # - 容差仍 < 最小 stroke 宽度，避免漏报真正的重叠
@@ -1219,7 +1263,7 @@ class LayoutScene(Scene):
             tolerance = max(base_tolerance, stroke_tolerance)
 
             if x_overlap > tolerance and y_overlap > tolerance:
-                # 修复 P0-6：命中 ALLOWED_PATTERNS 模式时，stroke 接触
+                # 命中 ALLOWED_PATTERNS 模式时，stroke 接触
                 # 应豁免（物理图元间天然存在空间关系，不是布局错误）
                 if pattern_matched:
                     continue
@@ -1245,31 +1289,36 @@ class LayoutScene(Scene):
 
         if len(placed_objects) >= 1:
             # ---- 1. 堆叠总高度 vs 区域可用高度 ----
-            # 计算所有对象的包围盒总高度（从最顶部到最底部）
-            all_tops = [o.get_top()[1] for o in placed_objects]
-            all_bottoms = [o.get_bottom()[1] for o in placed_objects]
-            stack_total_height = max(all_tops) - min(all_bottoms)
-            region_avail_height = y_max - y_min
+            # 对已 arrange 过的元素（Σheight + (N-1)*buff），包围盒高度
+            # max(tops) - min(bottoms) 已等于其总占用高度，无需再加 buff。
+            # 唯一可能漏报的情况是元素位置由调用方手动设置且未保持 buff，
+            # 这种情况由 ELEMENT_OVERLAP 检查间接覆盖。
+            # 单对象时本检查等价于单对象高度检查，意义不大，跳过以减少噪音。
+            if len(placed_objects) >= 2:
+                all_tops = [o.get_top()[1] for o in placed_objects]
+                all_bottoms = [o.get_bottom()[1] for o in placed_objects]
+                stack_total_height = max(all_tops) - min(all_bottoms)
+                region_avail_height = y_max - y_min
 
-            if stack_total_height > region_avail_height:
-                violations.append(
-                    {
-                        "type": "STACK_OVERFLOW",
-                        "object_name": f"region_{region}",
-                        "region": region,
-                        "expected": f"total_height <= {region_avail_height:.2f} (区域可用高度)",
-                        "actual": (
-                            f"stacked_height = {stack_total_height:.2f}\n"
-                            f"  对象数: {len(placed_objects)}, "
-                            f"top={max(all_tops):.2f}, bottom={min(all_bottoms):.2f}"
-                        ),
-                        "detail": (
-                            f"区域内 {len(placed_objects)} 个对象堆叠后 "
-                            f"总高度 ({stack_total_height:.2f}) 超出区域可用高度 "
-                            f"({region_avail_height:.2f})，差值 {stack_total_height - region_avail_height:.2f}"
-                        ),
-                    }
-                )
+                if stack_total_height > region_avail_height:
+                    violations.append(
+                        {
+                            "type": "STACK_OVERFLOW",
+                            "object_name": f"region_{region}",
+                            "region": region,
+                            "expected": f"total_height <= {region_avail_height:.2f} (区域可用高度)",
+                            "actual": (
+                                f"stacked_height = {stack_total_height:.2f}\n"
+                                f"  对象数: {len(placed_objects)}, "
+                                f"top={max(all_tops):.2f}, bottom={min(all_bottoms):.2f}"
+                            ),
+                            "detail": (
+                                f"区域内 {len(placed_objects)} 个对象堆叠后 "
+                                f"总高度 ({stack_total_height:.2f}) 超出区域可用高度 "
+                                f"({region_avail_height:.2f})，差值 {stack_total_height - region_avail_height:.2f}"
+                            ),
+                        }
+                    )
 
             # ---- 2. 各对象宽度 vs 区域/列宽 ----
             region_avail_width = x_max - x_min
@@ -1291,9 +1340,6 @@ class LayoutScene(Scene):
                     )
 
             # ---- 3. 相邻元素间距合理性检查 ----
-            # 修复 N0-3：跨栏间距误报。当 region="safe_area"（union 校验）
-            # 时，相邻对象可能来自不同栏（已设计有 0.5 单位列间距），
-            # 水平间距 5.51 是正常设计，触发 ABNORMAL_SPACING 误报。
             # 仅当 region 是单栏/具体栏（content_*/single_col/*_left/mid/right）
             # 时才做间距检查；safe_area 校验只关心"是否整体越界"，不关心列间距。
             skip_spacing_check = region in ("safe_area", "screen")
@@ -1811,7 +1857,7 @@ class LayoutScene(Scene):
     def _safe_get_stroke_width(mobject: Mobject) -> float:
         """安全地获取 Mobject 的最大 stroke_width（以 Manim 单位返回）
 
-        修复 P0-6：Manim 的 stroke_width 单位是 points（1 unit = 72 points），
+        Manim 的 stroke_width 单位是 points（1 unit = 72 points），
         通过除以 72 转为 Manim 单位，用于动态调整重叠检测容差。
 
         实现细节：
@@ -1889,12 +1935,16 @@ class LayoutScene(Scene):
         return group
 
     def _get_typing_run_time(self, mobj: Mobject) -> float:
-        """计算打字动画时长"""
-        return 1.0
+        """[未实现] 计算打字动画时长。子类应重写。"""
+        raise NotImplementedError(
+            "LayoutScene._get_typing_run_time 应由子类重写以提供打字动画时长"
+        )
 
     def _safe_speech_text(self, text: str) -> str:
-        """清理语音文本"""
-        return text
+        """[未实现] 清理语音文本中的特殊字符。子类应重写。"""
+        raise NotImplementedError(
+            "LayoutScene._safe_speech_text 应由子类重写以适配 TTS 引擎"
+        )
 
     # ============================================================
     # 语音相关（占位，实际由 voiceover 处理）
@@ -1905,9 +1955,10 @@ class LayoutScene(Scene):
         self.speech_service = service
 
     def voiceover(self, text: str, **kwargs):
-        """语音占位，实际应使用 manim_voiceover 的 with voiceover"""
-        # 这个方法在实际场景中会被覆盖，这里仅为保持接口一致
-        return self
+        """[未实现] 语音占位，子类应使用 manim_voiceover 的 with voiceover 块。"""
+        raise NotImplementedError(
+            "LayoutScene.voiceover 应由子类重写以接入 manim_voiceover"
+        )
 
     # ============================================================
     # 坐标参考系（调试用，符合 layout.md 第 15 节）

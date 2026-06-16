@@ -128,7 +128,7 @@ CIRCUIT_COLORS = {
     "path_green": "#66FFAA",  # 通路高亮（绿）
     "short_yellow": "#FFDD66",  # 短路警示（黄）
     "break_red": "#FF4444",  # 断路标记（红）
-    # 修复 P0-C：力矢量颜色严格遵循 references/physics.md 15.2.1 力-色固定映射表
+    # 力矢量颜色严格遵循 references/physics.md 15.2.1 力-色固定映射表
     # 力学域内最小色相差 51°，确保多力共存时高辨识度
     "force_G": "#EF4444",  # 重力 G（红，H:0°）
     "force_N": "#3B82F6",  # 支持力 N（蓝，H:217°）

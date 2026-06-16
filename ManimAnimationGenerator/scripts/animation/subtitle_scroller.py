@@ -103,7 +103,7 @@ class SubtitleScroller:
 
         # 运行时的行对象
         self._all_line_mobjs: List[Text] = []
-        # 修复 P0-D：所有 N 行一次性 arrange 好的整组（用于整组平移 + 裁切）
+        # 所有 N 行一次性 arrange 好的整组（用于整组平移 + 裁切）
         # 关键设计：滚动 = 整组平移一行高度 + 同步 opacity 切换
         # 任意瞬间字幕区只显示 visible_lines 行，且位置固定不变
         self._all_line_group: Optional[VGroup] = None
@@ -121,10 +121,6 @@ class SubtitleScroller:
 
         Manim 默认 1 单位 = 1 inch = 72 points，font_size 本身就是 points，
         因此 font_size/72 即为换算到 Manim 单位的基础值，再乘以行高系数。
-
-        修复 P0-N4：原公式错误地多乘了 MANIM_FONT_TO_UNIT_RATIO（8/72≈0.111），
-        导致实际行高只有正确值的 1/8（font_size=18 → 0.039 而非 ~0.35），
-        字幕行间几乎贴在一起，多行滚动时频繁重叠。已修正为正确的换算公式。
         实测验证：font_size=18 → line_height ≈ 0.35，与 Manim Text 实际渲染高度一致。
 
         Args:
@@ -316,10 +312,7 @@ class SubtitleScroller:
     def _build_subtitle_group(self) -> None:
         """构建字幕组（底衬+文字）
 
-        修复 P0-D：原实现只创建"当前可见"的 2 行 VGroup，滚动时通过
-        "旧 2 行上移 + 新行飞入 + 旧行淡出"三组并行 animate 实现滚动，
-        导致过渡期间 3 行在同一字幕区并存 → 文字重叠 + 错位。
-        现改为"整组预排 + 整体平移 + 边界淡入淡出"模式：
+        采用"整组预排 + 整体平移 + 边界淡入淡出"模式：
         1. 把所有 N 行一次性 VGroup.arrange(DOWN, buff=line_spacing)
         2. 整体平移到字幕区：line[0].top y = SUBTITLE_ZONE_TOP_Y - 0.14
            （与原"两行居中于字幕区底部"设计一致，line[0] 在上、line[1] 在下）
@@ -382,8 +375,8 @@ class SubtitleScroller:
     def _align_bg_to_visible_lines(self) -> None:
         """把底衬重新对齐到当前可见 2 行的中心
 
-        修复 P0-D：在 _enforce_top_boundary 可能平移了 subtitle_group 之后，
-        底衬位置需要同步更新。否则底衬会与可见 2 行错位。
+        在 _enforce_top_boundary 可能平移了 subtitle_group 之后，
+        底衬位置需要同步更新，否则底衬会与可见 2 行错位。
         """
         if not self._subtitle_group or len(self._visible_indices) < 2:
             return
@@ -397,7 +390,7 @@ class SubtitleScroller:
     def _update_background_size(self) -> None:
         """根据当前可见 2 行更新底衬尺寸
 
-        修复 P0-D：滚动后当前可见 2 行的成员发生变化（line[k] 离开，
+        滚动后当前可见 2 行的成员发生变化（line[k] 离开，
         line[k+visible_lines] 进入），新行的 width 可能不同，
         需要重新调整底衬宽度。
         """
@@ -416,17 +409,46 @@ class SubtitleScroller:
         # 重新对齐到当前可见 2 行中心
         self._align_bg_to_visible_lines()
 
-    def _execute_scroll(self, event: ScrollEvent) -> None:
-        """执行单次滚动动画（整组平移 + 同步裁切）
+    def _compute_background_target(
+        self, in_line_idx: int
+    ) -> Tuple[float, float, float]:
+        """计算滚入新行后底衬的目标尺寸和中心 Y 坐标
 
-        修复 P0-D：原实现用 3 个并行 animate（旧 2 行上移 + 新行飞入 + 旧行淡出），
-        导致过渡期间旧 2 行与新飞入行在同一字幕区并存 → 文字重叠 + 错位。
-        现改为"整组预排 + 整体平移 + 边界淡入淡出"：
-        1. 新行 opacity 立即设为 1（准备滚入）
+        动画开始前预计算新底衬目标，与位移/opacity 同步进行动画。
+
+        Args:
+            in_line_idx: 即将滚入的行索引
+
+        Returns:
+            (new_width, new_height, new_center_y) 三元组
+        """
+        # 模拟"滚入后"的可见 2 行索引：[in_line_idx - visible_lines + 1, in_line_idx]
+        new_visible_indices = [
+            in_line_idx - self._visible_lines + 1 + k
+            for k in range(self._visible_lines)
+        ]
+        visible_mobjs = [self._all_line_mobjs[i] for i in new_visible_indices]
+        new_width = max(m.width for m in visible_mobjs)
+        new_height = sum(m.height for m in visible_mobjs) + self._line_spacing * (
+            self._visible_lines - 1
+        )
+        # 中心 Y：考虑整组平移后，新可见 2 行的实际中心位置
+        # 整组平移 in_line_scroll_distance 后，新可见行 [in_idx - vis + 1, in_idx]
+        # 的中心 = (它们当前中心) + scroll_distance
+        current_centers = [m.get_center()[1] for m in visible_mobjs]
+        new_center_y = sum(current_centers) / len(current_centers)
+        return new_width, new_height, new_center_y
+
+    def _execute_scroll(self, event: ScrollEvent) -> None:
+        """执行单次滚动动画（整组平移 + 同步裁切 + 底衬尺寸同步）
+
+        采用"整组预排 + 整体平移 + 边界淡入淡出"：
+        1. 新行 opacity 在动画前重置为 0（避免飞入前的"已可见"现象）
         2. 整组 _all_line_group 向上平移一行高度（UP * scroll_unit）
         3. 旧行 opacity 同步淡出到 0
-        4. 滚出顶部的行自然落到字幕区上方（被 opacity=0 隐藏）
-        5. 滚入底部的行自然进入字幕区（opacity=1 显示）
+        4. 新行 opacity 同步淡入到 1（与位移同步淡入，
+           避免在原位置"突然可见"再"飞入"到目标位置）
+        5. 底衬尺寸在动画内同步调整（避免动画期间底衬变形）
 
         关键：任意瞬间字幕区只显示 2 行（位置固定不变），
         没有"飞入"、"漂出"、"错位"现象。
@@ -437,15 +459,28 @@ class SubtitleScroller:
         out_line = self._all_line_mobjs[event.out_line_idx]
         in_line = self._all_line_mobjs[event.in_line_idx]
 
-        # 滚入的新行：先设为可见（与整组平移同步进行，无飞入延迟）
-        in_line.set_opacity(1)
+        in_line.set_opacity(0)
 
-        # 整组平移一行高度 + 同步设置滚出行为隐藏
-        # 两个 animate 并行：整组上移 + 滚出行淡出
+        # 动画前预计算底衬目标尺寸，作为 animate 的一部分
+        new_bg_w, new_bg_h, new_bg_y = self._compute_background_target(
+            event.in_line_idx
+        )
+        bg = self._subtitle_group[0]
+        padding_h = self._line_height * 0.3
+        padding_w = self._line_height * 0.8
+        target_bg_w = new_bg_w + padding_w * 2
+        target_bg_h = new_bg_h + padding_h * 2
+
+        # 整组平移一行高度 + 同步设置滚出/滚入行的透明度 + 底衬尺寸同步
+        # 四个 animate 并行：整组上移 + 滚出行淡出 + 滚入行淡入 + 底衬缩放
         # 字幕区位置固定：line[0] 和 line[1] 始终在同一位置
         self._scene.play(
             self._all_line_group.animate.shift(UP * event.scroll_distance),
             out_line.animate.set_opacity(0),
+            in_line.animate.set_opacity(1),
+            bg.animate.stretch_to_fit_width(target_bg_w).stretch_to_fit_height(
+                target_bg_h
+            ),
             run_time=event.duration,
         )
 
@@ -457,8 +492,7 @@ class SubtitleScroller:
         visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
         self._text_group = VGroup(*visible_mobjs)
 
-        # 更新底衬尺寸（新行的宽度可能不同）
-        self._update_background_size()
+        self._align_bg_to_visible_lines()
 
     def hide(self) -> None:
         """隐藏字幕"""
