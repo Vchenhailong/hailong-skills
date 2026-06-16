@@ -33,22 +33,35 @@
 │   │   │   ├── main_content_zone.py    # 主内容区容器（单栏/两栏/三栏动态边界）
 │   │   │   └── graphics_zone.py        # 图形区容器（溢出优先缩放，防入字幕区）
 │   │   ├── engine.py                   # 布局决策引擎（根据内容数量自动选择单/两/三栏）
-│   │   ├── scene_base.py               # LayoutScene 场景基类（聚合所有 Zone，提供高层 API）
-│   │   └── concat_videos.sh
+│   │   ├── optimizer.py                # 布局优化器（文本换行/缩放/颜色保持、防子对象颜色丢失）
+│   │   └── scene_base.py               # LayoutScene 场景基类（聚合所有 Zone，提供高层 API；含 CJK 环境自检钩子）
+│   │
 │   ├── animation/                      # 动画组件库
 │   │   ├── __init__.py                 # 统一导出
 │   │   └── subtitle_scroller.py        # 字幕滚动管理器（整行直接翻动，无 FadeIn/FadeOut）
+│   │
+│   ├── environment/                    # 环境自检与 CJK 配置（v1.1 新增）
+│   │   ├── __init__.py                 # 统一导出（check / run_setup / RenderPath 等）
+│   │   ├── tex_engine_probe.py         # LaTeX 引擎探测（pdflatex / xelatex / lualatex 可用性 + 版本）
+│   │   ├── cjk_checker.py              # CJK 综合自检（宏包 kpsewhich + 中文字体 + 渲染路径决策 + 跨平台盘符并行扫描）
+│   │   ├── cjk_installer.py            # 缺失组件自动安装（apt/brew/choco 分平台分发；默认 dry_run）
+│   │   └── interactive.py              # 交互层（自动检测失败时 stdin 询问用户指定路径/确认安装；仅 TTY 启用）
 │   │
 │   ├── validation/                     # 验证器模块
 │   │   ├── __init__.py                 # 统一导出
 │   │   └── course_schema_validator.py  # JSON Schema 验证器（校验课程文件结构正确性）
 │   │
+│   ├── physics_graphics.py             # 物理图元工厂（force_arrow / circuit / voltmeter / 斜面等；遵循 physics.md 规范）
+│   ├── visual_actions.py               # 视觉动作注册表（highlight_xxx / show_xxx 等高亮动画）
+│   ├── validate_layout.py              # 布局校验器（_precheck_mobject / boundary check / overlap detect；CLI 入口）
+│   ├── validate_course_contents.py     # 课程内容校验器（CLI 入口，遍历 courses/ 目录跑 JSON Schema 校验）
 │   ├── tex_tools.py                    # LaTeX 解析工具（符号映射表、parse_mixed_content）
 │   ├── subtitle_splitter.py            # 语音文本拆分行（split_utterance）
 │   └── split_atom.py                   # 原子拆分工具
 │
 ├── media/                              # 渲染输出（Manim 自动生成的视频和图像）
 │    └── videos/
+├── concat_videos.sh                    # 多场景合并脚本（项目根目录，与 scenes/ 平级）
 ├── manim.config                        # manim 构建的基础配置
 ├── pyproject.toml                      # 项目配置和依赖管理
 ├── config.py                           # 全局配置（可选）

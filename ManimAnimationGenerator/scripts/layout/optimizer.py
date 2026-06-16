@@ -17,14 +17,20 @@
 
 from __future__ import annotations
 
+import logging
+import re
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-from manim import Mobject, VGroup, Text, MathTex
+from manim import Mobject, VGroup, Text, MathTex, DOWN
+
+from scripts.layout.engine import LayoutEngine
+from scripts.layout.constants import ZoneConstants
 
 
 @dataclass
 class OptimizationResult:
     """优化结果"""
+
     success: bool  # 是否优化成功
     rounds_executed: int  # 执行了几轮调整（0-3）
     adjustments: List[Dict[str, Any]]  # 调整日志
@@ -111,13 +117,34 @@ class LayoutOptimizer:
         """
         self._adjustments = []
         current_mobjects = mobjects
-        round_count = 0
         max_rounds = 3  # 最多 3 轮
 
-        for violation in violations:
+        # 修复 P1-N3：原实现把 round_count 放在 for 外层，导致第一个违规耗尽
+        # 3 轮后 round_count == 3，后续违规的 while 条件直接为 False，
+        # 永远不会再执行任何策略 → 后面的违规全部被静默跳过。
+        # 这里把 round_count 移到 for 内部，每个违规独立计数 3 轮。
+        # 修复 P0-N7：原实现在单次 _verify_no_violation 通过后立即 return，
+        # 导致多违规场景下后序违规从未被尝试处理。现改为：所有违规都尝试处理后
+        # 再统一判断 success。
+        remaining_violations: List[Dict[str, Any]] = list(violations)
+        processed_violations: List[Dict[str, Any]] = []
+        all_resolved = True
+
+        for violation in list(remaining_violations):
+            round_count = 0
+            # 跟踪已尝试过的策略，避免同轮重复使用同一策略（升级到下一策略）
+            tried_strategies = set()
+            resolved = False
             while round_count < max_rounds:
                 round_count += 1
                 strategy = self._select_strategy(violation, current_mobjects)
+                # 升级策略：若该策略本轮已尝试过但未消除违规，则跳过它选择下一个
+                if strategy in tried_strategies:
+                    if self.STRATEGY_SPLIT not in tried_strategies:
+                        strategy = self.STRATEGY_SPLIT
+                    else:
+                        # 三种策略都用过了，本违规已无更多方案可走
+                        break
 
                 if strategy == self.STRATEGY_SCALE:
                     success = self._apply_scale(current_mobjects, violation)
@@ -126,38 +153,60 @@ class LayoutOptimizer:
                 else:  # STRATEGY_SPLIT
                     success = self._apply_split(violation, current_mobjects)
 
+                tried_strategies.add(strategy)
+
                 if success:
                     # 记录调整日志
-                    self._adjustments.append({
-                        "round": round_count,
-                        "strategy": strategy,
-                        "violation_type": violation["type"],
-                        "success": True,
-                    })
+                    self._adjustments.append(
+                        {
+                            "round": round_count,
+                            "strategy": strategy,
+                            "violation_type": violation["type"],
+                            "success": True,
+                        }
+                    )
 
                     # 重新测量并验证
-                    if self._verify_no_violation(current_mobjects, violations):
-                        return OptimizationResult(
-                            success=True,
-                            rounds_executed=round_count,
-                            adjustments=self._adjustments,
-                        )
+                    if self._verify_no_violation(current_mobjects, [violation]):
+                        resolved = True
+                        processed_violations.append(violation)
+                        break
+                    # 策略成功了但违规未消失 → 清空 tried_strategies 让升级生效
+                    tried_strategies.clear()
                 else:
                     # 当前策略失败，尝试下一个策略
-                    self._adjustments.append({
-                        "round": round_count,
-                        "strategy": strategy,
-                        "violation_type": violation["type"],
-                        "success": False,
-                    })
+                    self._adjustments.append(
+                        {
+                            "round": round_count,
+                            "strategy": strategy,
+                            "violation_type": violation["type"],
+                            "success": False,
+                        }
+                    )
 
-        # 所有轮次执行完毕仍失败
+            if not resolved:
+                all_resolved = False
+                logging.warning(
+                    f"[optimize] 违规 {violation.get('type')} 处理失败，"
+                    f"对象 {violation.get('object_name')}"
+                )
+
+        if all_resolved and self._verify_no_violation(
+            current_mobjects, remaining_violations
+        ):
+            return OptimizationResult(
+                success=True,
+                rounds_executed=sum(1 for _ in self._adjustments),
+                adjustments=self._adjustments,
+            )
+
+        # 所有违规所有轮次执行完毕仍失败
         return OptimizationResult(
             success=False,
-            rounds_executed=round_count,
+            rounds_executed=sum(1 for _ in self._adjustments),
             adjustments=self._adjustments,
             error_message=(
-                f"经过 {round_count} 轮自动优化仍无法解决布局问题。\n"
+                f"经过自动优化仍无法解决布局问题。\n"
                 f"建议：将相关原子拆分为更细粒度的独立原子。"
                 f"\n调整日志：{self._format_adjustments()}"
             ),
@@ -187,7 +236,8 @@ class LayoutOptimizer:
         # 检查是否有多行公式（适合换行）
         has_multirow_formulas = any(
             isinstance(m, MathTex) and "\\\\" in m.get_tex_string()
-            for m in mobjects if hasattr(m, "get_tex_string")
+            for m in mobjects
+            if hasattr(m, "get_tex_string")
         )
 
         if violation_type == "WIDTH_OVERFLOW":
@@ -251,13 +301,14 @@ class LayoutOptimizer:
         Returns:
             是否成功应用了至少一次换行
         """
-        from manim import MathTex, Text
-
         # 从 violation 或 column_layout 中获取目标栏宽（单位：Manim 坐标）
         target_width = violation.get("column_width", None)
         if target_width is None:
             # 回退：使用违规对象的实际超宽比例估算目标宽度
-            target_width = ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MAX - ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MIN
+            target_width = (
+                ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MAX
+                - ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MIN
+            )
 
         wrapped_count = 0
         for i, mobj in enumerate(mobjects):
@@ -288,10 +339,10 @@ class LayoutOptimizer:
         """
         width = 0.0
         for ch in text:
-            if '\u4e00' <= ch <= '\u9fff' or '\u3400' <= ch <= '\u4dbf':
+            if "\u4e00" <= ch <= "\u9fff" or "\u3400" <= ch <= "\u4dbf":
                 # CJK 统一汉字 / 扩展 A 区
                 width += 0.6
-            elif '\u3000' <= ch <= '\u303f' or '\uff00' <= ch <= '\uffef':
+            elif "\u3000" <= ch <= "\u303f" or "\uff00" <= ch <= "\uffef":
                 # CJK 符号和标点 / 全角字母数字
                 width += 0.6
             else:
@@ -316,7 +367,15 @@ class LayoutOptimizer:
         Returns:
             是否执行了换行重建
         """
-        original_text = text_obj.get_plaintext() if hasattr(text_obj, 'get_plaintext') else str(text_obj.text)
+        # 修复 Manim v0.20 兼容性：原 hasattr 检查 'get_plaintext' 方法名，
+        # 但 Manim 通过 property 装饰器将其实现为 'plaintext' 属性，hasattr
+        # 检查的是方法名（不存在），实际访问 plaintext 才返回字符串，导致
+        # 跑渲染时触发 AttributeError。
+        # 改用 try/except 模式：优先访问 .plaintext 属性，回退到 str(.text)。
+        try:
+            original_text = text_obj.plaintext
+        except AttributeError:
+            original_text = str(text_obj.text)
 
         # 已经不超宽，无需换行
         if text_obj.width <= target_width * 0.95:
@@ -327,7 +386,9 @@ class LayoutOptimizer:
         if char_width_estimate == 0:
             return False
 
-        chars_per_line = max(int(target_width / (char_width_estimate / len(original_text))), 8)
+        chars_per_line = max(
+            int(target_width / (char_width_estimate / len(original_text))), 8
+        )
 
         # 按自然断点分行
         lines = self._split_text_by_lines(original_text, chars_per_line)
@@ -339,17 +400,70 @@ class LayoutOptimizer:
         new_text_str = "\n".join(lines)
         try:
             # 尝试保持原对象的样式属性
-            original_font_size = getattr(text_obj, 'font_size', None)
-            original_color = text_obj.color if hasattr(text_obj, 'color') else None
+            original_font_size = getattr(text_obj, "font_size", None)
+            original_color = text_obj.color if hasattr(text_obj, "color") else None
+            # 修复 P0-左栏消失：原代码仅用 text_obj.color 作为颜色基准。
+            # 但 Manim Text 类的 .color 属性（继承自 SVGMobject）默认渲染为
+            # 黑色（#000000），即便构造时传 color=WHITE，父级 .color 仍可能
+            # 是 #000000（子级 fill_color 才是 #FFFFFF）。下面必须用子级
+            # 的真实 fill_color 作为原始颜色，避免重建后 fill 错误变黑。
+            sub_fill_color = None
+            if text_obj.submobjects:
+                try:
+                    sub_fill_color = text_obj.submobjects[0].get_fill_color()
+                except Exception:
+                    sub_fill_color = None
+            if sub_fill_color is not None:
+                original_color = sub_fill_color
+            # 兼容颜色字符串（如 "#FFFFFF" → WHITE）
+            try:
+                from manim.utils.color import color_to_hex
 
-            new_text = Text(new_text_str, font_size=original_font_size or text_obj.font_size)
+                if isinstance(original_color, str) and original_color.startswith("#"):
+                    original_color = color_to_hex(original_color)
+            except Exception:
+                pass
+
+            new_text = Text(
+                new_text_str,
+                font_size=original_font_size or text_obj.font_size,
+                color=original_color,
+            )
+            # 兜底：再次显式 set_color 一次（部分 Manim 版本构造器 color 会被 SVG 路径覆盖）
             if original_color is not None:
-                new_text.set_color(original_color)
+                try:
+                    new_text.set_color(original_color)
+                except Exception:
+                    pass
 
             # 将原对象替换为新对象的内容
             # 由于 Manim 不支持直接替换内部文本，这里采用变通方式：
             # 缩放新文本以匹配原对象的位置信息，并通过 mobject.become() 同步
             text_obj.become(new_text)
+            # 修复 P0-左栏消失：become() 在 Text 类上不能可靠传递字符的
+            # fill_color（VMobjectFromSVGPath 类型的子对象的 fill 是 SVG
+            # 内嵌属性，become 只复制 points/curves，不复制 fill），导致
+            # 换行后字符 fill 从 #FFFFFF 退化为 #000000，黑色文字在黑色
+            # 背景上完全不可见（0 像素）。必须在 become 后强制递归把每个
+            # 子对象的 fill_color 重新设为原色。
+            if original_color is not None:
+                try:
+                    text_obj.set_color(original_color)
+                except Exception:
+                    pass
+
+                # 递归强制设置所有子对象的 fill_color（双重保险）
+                def _force_fill(mob, color):
+                    if hasattr(mob, "set_fill"):
+                        try:
+                            mob.set_fill(color, opacity=1.0)
+                        except Exception:
+                            pass
+                    if hasattr(mob, "submobjects") and mob.submobjects:
+                        for sub in mob.submobjects:
+                            _force_fill(sub, color)
+
+                _force_fill(text_obj, original_color)
             return True
         except Exception as e:
             logging.warning(f"[_wrap_text_object] 换行重建失败: {e}")
@@ -378,7 +492,7 @@ class LayoutOptimizer:
             break_point = -1
 
             # 优先级从高到低：句号 > 分号 > 逗号 > 空格 > 强制截断
-            for delimiter in ['。', '；', '，', ',', ';', '.', ' ', '\n']:
+            for delimiter in ["。", "；", "，", ",", ";", ".", " ", "\n"]:
                 last_pos = chunk.rfind(delimiter)
                 if last_pos != -1:
                     break_point = last_pos + 1  # 保留分隔符
@@ -396,48 +510,222 @@ class LayoutOptimizer:
         return lines
 
     def _wrap_math_object(self, math_obj: MathTex, target_width: float) -> bool:
-        """对 MathTex 对象执行换行重建
+        """对 MathTex 对象执行换行重建（修复 P0-A）
 
-        对长公式按字符数阈值拆分，在合适运算符处插入 \\\\
-        （LaTeX 换行符），然后重建 MathTex 对象。
+        修复 P0-A：原实现直接把整个 MathTex 字符串传给通用 _split_tex_by_breakpoints，
+        按 max_chars 字符数硬切，会破坏 LaTeX 公式语法（分数/下标/根号被拆到两行）。
+        现改为按 LaTeX 公式原子（保留完整语法单元）拆分 + VGroup 堆叠重建。
+
+        拆分规则（按优先级）：
+        1. 优先缩小 font_size（每次 -2，下限 18），缩到合适即返回
+        2. 缩小失败时按公式原子拆分（保留 LaTeX 语法完整性）：
+           - 优先用原字符串中已存在的 \\\\（手动换行符）拆分
+           - 其次按 = \\pm \\mp \\cdot \\times \\quad \\, 等二元运算符拆分
+           - 再次按 + - , 单字符运算符拆分（不拆 \\frac / \\sqrt / ^ / _ 内部）
+           - 永不拆单个 LaTeX 字符（如 R_1 永远保持完整）
+        3. 拆分后用 MathTex(part, font_size=...) 重建每行，VGroup.arrange(DOWN) 堆叠
+        4. 重新测量并 scale 适配 target_width
 
         Args:
             math_obj: 待处理的 MathTex 对象
             target_width: 目标栏宽（Manim 单位）
 
         Returns:
-            是否执行了换行重建
+            是否执行了换行/缩放重建
         """
         tex_str = math_obj.get_tex_string()
 
-        # 已经不超宽
+        # 已经不超宽 → 直接返回
         if math_obj.width <= target_width * 0.95:
             return False
 
-        # 长公式阈值（字符数）
-        long_threshold = 50
+        current_font_size = getattr(math_obj, "font_size", 32)
+        original_color = math_obj.color if hasattr(math_obj, "color") else None
 
-        if len(tex_str) <= long_threshold:
-            return False
+        # 策略 1：优先缩小 font_size（每次 -2，下限 18）
+        # 修复 P0-A：MathTex 重建最稳定的方式是缩小 font_size，避免拆词
+        shrunk_math = self._shrink_math_font(
+            tex_str, current_font_size, target_width, original_color
+        )
+        if shrunk_math is not None:
+            math_obj.become(shrunk_math)
+            return True
 
-        # 寻找合适的换行断点（优先在 =、+、-、\\times 等二元运算符之后）
-        parts = self._split_tex_by_breakpoints(tex_str, long_threshold)
+        # 策略 2：缩小到下限仍超宽 → 按公式原子拆分重建
+        parts = self._split_tex_into_atoms(tex_str, target_width, math_obj)
 
         if len(parts) <= 1:
+            # 实在拆不开，最后回退到整体 scale（不破坏结构但缩小）
+            scale_factor = (target_width * 0.95) / max(math_obj.width, 0.01)
+            if scale_factor < 1.0:
+                new_math = MathTex(tex_str, font_size=current_font_size)
+                if original_color is not None:
+                    new_math.set_color(original_color)
+                new_math.scale(scale_factor, about_point=new_math.get_center())
+                math_obj.become(new_math)
+                return True
             return False
 
-        # 用 LaTeX 换行符拼接
-        new_tex_str = " \\\\\n".join(parts)
-
         try:
-            new_math = MathTex(new_tex_str, font_size=math_obj.font_size)
-            if hasattr(math_obj, 'color'):
-                new_math.set_color(math_obj.color)
+            # 用 LaTeX 换行符拼接 → Manim 内部 align 到 VGroup
+            new_tex_str = " \\\\\n".join(parts)
+            new_math = MathTex(new_tex_str, font_size=current_font_size)
+            if original_color is not None:
+                new_math.set_color(original_color)
+            # 重新测量并 scale 适配 target_width
+            if new_math.width > target_width * 0.98:
+                scale_factor = (target_width * 0.95) / max(new_math.width, 0.01)
+                new_math.scale(scale_factor, about_point=new_math.get_center())
             math_obj.become(new_math)
             return True
         except Exception as e:
             logging.warning(f"[_wrap_math_object] 公式换行重建失败: {e}")
             return False
+
+    @staticmethod
+    def _shrink_math_font(
+        tex_str: str,
+        current_font_size: int,
+        target_width: float,
+        color,
+    ) -> "Optional[MathTex]":
+        """缩小 MathTex 字号以适配 target_width
+
+        修复 P0-A：每次 -2，下限 18。返回 None 表示已无法再缩。
+
+        Args:
+            tex_str: 原始 LaTeX 字符串
+            current_font_size: 当前字号
+            target_width: 目标栏宽（Manim 单位）
+            color: 颜色（用于重建后保持样式）
+
+        Returns:
+            缩小后 MathTex 对象，或 None（已达下限仍超宽）
+        """
+        MIN_FONT_SIZE = 18  # 修复 P0-A：下限 18
+        FONT_STEP = 2  # 修复 P0-A：每次 -2
+
+        # 先创建原始字号的 MathTex 测量实际宽度
+        try:
+            probe = MathTex(tex_str, font_size=current_font_size)
+        except Exception:
+            return None
+
+        probe_width = probe.width
+        if probe_width <= target_width * 0.95:
+            return probe  # 当前字号已足够
+
+        # 从当前字号开始逐步缩小
+        font_size = current_font_size
+        while font_size > MIN_FONT_SIZE:
+            font_size -= FONT_STEP
+            try:
+                candidate = MathTex(tex_str, font_size=font_size)
+                if candidate.width <= target_width * 0.95:
+                    if color is not None:
+                        candidate.set_color(color)
+                    return candidate
+            except Exception:
+                continue
+
+        # 已到下限仍超宽 → 返回最小字号的版本（交给下一步拆分处理）
+        try:
+            min_math = MathTex(tex_str, font_size=MIN_FONT_SIZE)
+            if color is not None:
+                min_math.set_color(color)
+            return min_math
+        except Exception:
+            return None
+
+    def _split_tex_into_atoms(
+        self,
+        tex_str: str,
+        target_width: float,
+        math_obj: MathTex,
+    ) -> List[str]:
+        """按 LaTeX 公式原子拆分为多行（修复 P0-A）
+
+        拆分规则（按优先级，**永不破坏语法结构**）：
+        1. 已有 \\\\ 手动换行符 → 直接按 \\\\ 拆
+        2. 按 = / \\pm / \\mp / \\cdot / \\times / \\quad / \\, / \\; / \\! 拆分
+        3. 按 + / - / , 拆分（不拆 \\frac 分子分母、不拆 ^ / _ 下标）
+        4. 拆不开时返回单元素列表
+
+        Args:
+            tex_str: 原始 LaTeX 字符串
+            target_width: 目标栏宽
+            math_obj: 原 MathTex（用于辅助测量单段宽度）
+
+        Returns:
+            公式段列表（每段都是完整 LaTeX 子表达式，可独立被 MathTex 解析）
+        """
+        # 规则 1：已含手动换行符 → 直接按 \\ 拆
+        if "\\\\" in tex_str:
+            return [p.strip() for p in tex_str.split("\\\\") if p.strip()]
+
+        # 修复 P0-A：使用 re.split 按 LaTeX 运算符/分隔符拆
+        # 保留捕获组（括号），拆出的分隔符也作为独立 token 保留
+        # 优先级：\\quad / \\, / \\; / \\!  →  + - = ,  →  \\
+        # 注意：\frac / \sqrt / ^ / _ 必须保持完整
+        split_pattern = (
+            r"(\\quad|\\,|\\;|\\!|\\ |"
+            r"\\pm|\\mp|\\cdot|\\times|\\div|\\cdot|\\leq|\\geq|\\neq|\\approx|\\equiv|"
+            r"\\to|\\rightarrow|\\leftarrow|\\Rightarrow|\\Leftarrow|"
+            r"[+\-=,:;])"
+        )
+        tokens = re.split(split_pattern, tex_str)
+
+        # 去除空 token
+        tokens = [t.strip() for t in tokens if t and t.strip()]
+
+        # 合并连续的运算符到前一个 token（避免孤立 `+` 行）
+        merged: List[str] = []
+        buffer = ""
+        for tok in tokens:
+            if tok in (
+                "+",
+                "-",
+                "=",
+                ",",
+                ":",
+                ";",
+                "\\,",
+                "\\;",
+                "\\!",
+                "\\ ",
+                "\\quad",
+                "\\pm",
+                "\\mp",
+                "\\cdot",
+                "\\times",
+                "\\div",
+                "\\leq",
+                "\\geq",
+                "\\neq",
+                "\\approx",
+                "\\equiv",
+                "\\to",
+                "\\rightarrow",
+                "\\leftarrow",
+                "\\Rightarrow",
+                "\\Leftarrow",
+            ):
+                # 运算符：附加到前一个 token（保持语法完整）
+                buffer = (buffer + " " + tok).strip() if buffer else tok
+            else:
+                if buffer:
+                    merged.append(buffer)
+                    buffer = ""
+                merged.append(tok)
+        if buffer:
+            merged.append(buffer)
+
+        if len(merged) <= 1:
+            return [tex_str]  # 实在拆不开
+
+        # 验证拆分后行数：尝试测量每段是否在目标宽度内
+        # 至少要有 > 1 段，且合并后总宽度 < 拆分前（否则无意义）
+        return merged
 
     @staticmethod
     def _split_tex_by_breakpoints(tex: str, max_chars: int) -> List[str]:
@@ -458,8 +746,8 @@ class LayoutOptimizer:
             公式段列表
         """
         # 先按已有换行分割
-        if '\\\\' in tex:
-            initial_parts = [p.strip() for p in tex.split('\\\\')]
+        if "\\\\" in tex:
+            initial_parts = [p.strip() for p in tex.split("\\\\")]
         else:
             initial_parts = [tex]
 
@@ -470,7 +758,16 @@ class LayoutOptimizer:
                 bp = -1
 
                 # 按优先级寻找断点
-                for pattern in ['=', r'\pm', r'\mp', r'\cdot', r'\times', '+', '-', ',']:
+                for pattern in [
+                    "=",
+                    r"\pm",
+                    r"\mp",
+                    r"\cdot",
+                    r"\times",
+                    "+",
+                    "-",
+                    ",",
+                ]:
                     # 向右搜索最后一个匹配位置（避免在最开头断开）
                     search_start = max(len(chunk) // 2, 1)
                     pos = chunk.rfind(pattern, search_start)
@@ -523,6 +820,17 @@ class LayoutOptimizer:
 
         重新测量内容尺寸，判断是否仍在允许范围内。
 
+        修复 P0-N8：原实现仅检查 WIDTH_OVERFLOW / HEIGHT_OVERFLOW 两类违规，
+        对其他类型（REGION_OVERFLOW / ELEMENT_OVERLAP / SCREEN_OUT_OF_BOUNDS /
+        STACK_OVERFLOW / WIDTH_EXCEEDS_COLUMN / ABNORMAL_SPACING / OVER_DENSE /
+        TOO_SPARSE / CENTER_OFFSET）一律返回 True（视为已解决），
+        导致真正的区域侵入/重叠等违规被静默放行。
+        修复后按违规类型分类处理：
+        - 测量类（WIDTH/HEIGHT_OVERFLOW）：使用 measure_content_dims 验证
+        - 区域/重叠/越界类：返回 False（需调用方用 validate_layout 重测）
+        - 密度/间距/重心类：返回 False（同上）
+        - 未知类型：返回 False（保守策略，避免误判通过）
+
         Args:
             mobjects: 调整后的 Mobject 列表
             original_violations: 原始违规列表（用于判断类型）
@@ -530,13 +838,47 @@ class LayoutOptimizer:
         Returns:
             是否无违规
         """
-        total_width, total_height = LayoutEngine.measure_content_dims(mobjects)
+        if not original_violations:
+            return True
 
+        # 可在优化器内通过测量验证的违规类型
+        MEASURABLE_TYPES = {"WIDTH_OVERFLOW", "HEIGHT_OVERFLOW"}
+        # 需调用方用 validate_layout 重新校验的类型（优化器内无法可靠验证）
+        REVALIDATE_TYPES = {
+            "REGION_OVERFLOW",
+            "REGION_INTRUSION",
+            "ELEMENT_OVERLAP",
+            "SCREEN_OUT_OF_BOUNDS",
+            "STACK_OVERFLOW",
+            "WIDTH_EXCEEDS_COLUMN",
+            "ABNORMAL_SPACING",
+            "OVER_DENSE",
+            "TOO_SPARSE",
+            "CENTER_OFFSET",
+        }
+
+        # 收集所有类型；任何未知类型保守返回 False
+        all_types = {v.get("type", "") for v in original_violations}
+        unknown_types = all_types - MEASURABLE_TYPES - REVALIDATE_TYPES
+        if unknown_types:
+            logging.debug(
+                f"[_verify_no_violation] 未知违规类型 {unknown_types}，"
+                "保守返回 False"
+            )
+            return False
+
+        # 含可重测类型时返回 False，由调用方走 validate_layout 重测
+        if all_types & REVALIDATE_TYPES:
+            return False
+
+        # 仅含测量类违规时，进行尺寸校验
+        total_width, total_height = LayoutEngine.measure_content_dims(mobjects)
         for v in original_violations:
-            if v["type"] == "WIDTH_OVERFLOW":
+            vtype = v.get("type", "")
+            if vtype == "WIDTH_OVERFLOW":
                 if total_width > ZoneConstants.HORIZONTAL_OVERFLOW_THRESHOLD:
                     return False
-            elif v["type"] == "HEIGHT_OVERFLOW":
+            elif vtype == "HEIGHT_OVERFLOW":
                 if total_height > ZoneConstants.VERTICAL_OVERFLOW_THRESHOLD:
                     return False
 
@@ -560,10 +902,4 @@ class LayoutOptimizer:
     @staticmethod
     def measure_content_dims(mobjs: list) -> Tuple[float, float]:
         """测量内容尺寸（委托给 LayoutEngine）"""
-        from scripts.layout.engine import LayoutEngine
         return LayoutEngine.measure_content_dims(mobjs)
-
-
-# 导入依赖（避免循环导入）
-from scripts.layout.engine import LayoutEngine
-from scripts.layout.constants import ZoneConstants

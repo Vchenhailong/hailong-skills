@@ -4,7 +4,7 @@
 
 AI 在生成具体的 JSON 教学内容文件时，应参考此处的原子结构，但最终输出必须遵循 `math_latex.md` 第 6 节定义的 JSON Schema。
 
-示例参考格式：
+示例参考格式（**注意：`duration: 6.0` 是占位符，不是默认值**）：
 ```json
 {
   "id": "mat_mul_definition",
@@ -14,10 +14,57 @@ AI 在生成具体的 JSON 教学内容文件时，应参考此处的原子结�
     {"text": "(AB)_{ij} = Σ_k A_{ik}B_{kj}", "type": "formula"}
   ],
   "visual_action": "highlight_dot_product",
-  "speech": "...",
+  "speech": "矩阵乘法的定义是第 i 行第 j 列的元素，等于 A 的第 i 行与 B 的第 j 列对应元素乘积之和。",
   "duration": 6.0
 }
 ```
+
+## `duration` 字段填写规范（强制）
+
+`duration` **必须**基于 `speech` 字段的字符数计算，**禁止填固定值**或照抄示例的 `6.0`。完整规则见 [`json_schema.md` 第 5.2 节](json_schema.md) 和 [`tts_guide.md` T-D4 节](tts_guide.md)，本节为速查。
+
+**计算公式**：
+
+```
+SPEECH_SPEED = 4.0   # 字符/秒（中文朗读速度基准）
+min_duration = ceil(len(speech.strip()) / SPEECH_SPEED)
+duration    = max(min_duration, 3.0)   # 至少 3 秒
+```
+
+**约束**：
+
+- `duration < 3.0` → 自动修正为 3.0（最短朗读时长，见 SKILL.md G-tts-2）
+- `duration > 20.0` → **必须拆分原子**（将当前 atom 拆为多个子步骤，每个 duration ≤ 20.0）
+- `speech` 为空 → `duration` 取 6.0（默认占位值）
+- 含公式的 `speech` → 需先通过 `math_symbols_to_speech()` 映射符号（见 SKILL.md G-tts-4），再按映射后的中文文本计算字符数
+
+**计算示例**：
+
+| speech（已符号映射） | 字符数 | min_duration | 实际 duration | 说明 |
+|---|---|---|---|---|
+| `"受力分析是力学的基础方法"` | 13 | 3.25 → ceil=4 | 4.0 | 简短陈述 |
+| `"牛顿第二定律表明，物体加速度的大小与所受合外力成正比，与质量成反比。"` | 32 | 8.0 | 8.0 | 标准讲解 |
+| `"电磁感应现象中，闭合回路的一部分导体在磁场中做切割磁感线运动时，导体中就会产生感应电流..."` | 80 | 20.0 | **拆分**为 2 个原子 | 超过 20s 上限 |
+
+**反例**（禁止）：
+```json
+// ❌ DON'T：照抄示例填 6.0
+{"id": "...", "speech": "三行说明，每行 15 字共 45 字", "duration": 6.0}  // 应为 12.0
+
+// ❌ DON'T：duration 与 speech 长度严重不匹配
+{"id": "...", "speech": "短", "duration": 10.0}  // 应为 3.0
+
+// ❌ DON'T：单原子超过 20s 未拆分
+{"id": "...", "speech": "<60+ 字长篇>", "duration": 25.0}  // 必须拆分为 2 个
+```
+
+**相关校验规则**：
+- SKILL.md G-tts-2：`duration >= 3.0`（最小朗读时长）
+- SKILL.md G-tts-4：TTS 文本必须先做符号映射
+- tts_guide.md T-D4：min_duration 公式与修正策略
+- workflow.md：「阶段三 step 编写规范」中关于时长估算的章节
+
+---
 
 ## 矩阵乘法（来源：同济高等数学 §2.1，人教版高中数学选修4-2）
 前置知识：向量点积、矩阵基本概念。

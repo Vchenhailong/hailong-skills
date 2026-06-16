@@ -68,6 +68,12 @@ class SubtitleZone(ZoneBase):
     def show(self, text: str, font_size: int = ZC.SUBTITLE_FONT_SIZE) -> VGroup:
         """渲染并显示字幕（含底衬）
 
+        注意（P1-9）：本方法仅做"显示单帧字幕"，不涉及滚动。
+        若需滚动多行字幕，请使用 SubtitleScroller.show()。
+        两者职责分离：
+          - SubtitleZone.show : 单帧展示（2 行以内），不做滚动、不预计算时序
+          - SubtitleScroller.show : 多行滚动展示（含预计算滚动事件）
+
         装配逻辑：
         1. 创建文字对象 → 计算自适应底衬尺寸
         2. 底衬 Rectangle（深色半透明，宽度=min(文字宽+内边距*2, 上限14.0)）
@@ -118,11 +124,23 @@ class SubtitleZone(ZoneBase):
 
         subtitle_group = VGroup(bg, text_group)
 
-        subtitle_group.move_to(ORIGIN).align_to(ORIGIN, DOWN).shift(
-            DOWN * abs(ZC.SUBTITLE_ZONE_BOTTOM_FIXED_Y)
+        # 修复 P0-5：原代码
+        #   subtitle_group.move_to(ORIGIN).align_to(ORIGIN, DOWN).shift(DOWN * abs(Y))
+        #   subtitle_group.align_to(ORIGIN, LEFT + RIGHT)
+        # 第一个 align_to(ORIGIN, DOWN) 的第一个参数是 mobject，传 ORIGIN 点是错误的；
+        # 第二个 align_to(ORIGIN, LEFT+RIGHT) 同理。
+        # 正确做法：直接用 set_y / set_x 设定绝对位置（依赖 ZC 中的固定值，
+        # 符合"字幕底部固定"红线约束），并保留上界约束防侵入主内容区。
+        # 水平居中
+        subtitle_group.set_x(0)
+        # 底部固定到 SUBTITLE_ZONE_BOTTOM_FIXED_Y（防抖动）
+        # subtitle_group.height/2 是其中心到顶/底的距离
+        # 实际是 center.y = bottom_fixed_y + subtitle_group.height/2
+        subtitle_group.set_y(
+            ZC.SUBTITLE_ZONE_BOTTOM_FIXED_Y + subtitle_group.height / 2
         )
-        subtitle_group.align_to(ORIGIN, LEFT + RIGHT)
 
+        # 上界约束：top 超过 SUBTITLE_ZONE_TOP_Y 时下移（防侵入主内容区）
         top_y = subtitle_group.get_top()[1]
         if top_y > ZC.SUBTITLE_ZONE_TOP_Y:
             subtitle_group.shift(DOWN * (top_y - ZC.SUBTITLE_ZONE_TOP_Y))

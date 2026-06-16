@@ -65,7 +65,18 @@ builtin_knowledge.md
      - 检查技能 `scripts/physics_graphics.py` 是否已实现该图元
      - 未实现 → 优先使用上述第三方库
      - 第三方库也无 → 才在技能中新增实现
-10. **强制覆盖规则**：项目中的 `scripts/` 核心基础设施目录必须无条件使用技能版本（详见「工程化脚手架说明」），禁止保留自定义版本，否则将导致布局崩坏、验证失效。
+10. **分层基础设施规则**：`scripts/` 按"基线 / 扩展"两层管理——
+    - **基线层**（**默认使用技能版本**；项目可基于实际需要更新复制后的基线文件）：`scripts/layout/`、`scripts/animation/`、`scripts/validation/`、`templates/` 的结构部分
+    - **扩展层**（项目可按需补充图元/工具，**可基于实际需要更新复制后的基线文件**）：`scripts/physics_graphics.py`（可追加 `create_*` 函数）、新增 `scripts/project_extensions/` 子目录
+    - **基线保护原因**：布局引擎 / 区域定义 / 校验器 / 字幕滚动器是核心约束链，修改会破坏技能的设计契约；扩展层与基线层不冲突，新图元走 VGroup 组装、不硬编码坐标、不绕过 `safe_place()` 即可
+    - **同步声明**：`scripts/environment/` 是基线新增（见原则 11），与布局引擎同级保护
+
+11. **CJK 环境自检规则**：渲染前必须调用 `scripts/environment/cjk_checker.py::check_cached()`，由 `LayoutScene.setup()` 钩子自动触发，**不允许**渲染到一半才报错。检测内容包括：
+    - LaTeX 引擎可用性（pdflatex / xelatex / lualatex）
+    - CJK 宏包可用性（xeCJK / CJKutf8 / ctex / fontspec）
+    - 中文字体可用性（Microsoft YaHei / Noto Sans CJK / 思源黑体）
+    - 推荐渲染路径：`tex_minipage` / `tex_standard` / `text_pango_only`
+    缺失组件时通过 `cjk_installer.install_suggested_commands()` 输出安装建议，**默认仅打印命令不自动执行**（`auto_install=True` 才执行，且 Windows 上拒绝自动安装）。
 
 ## 工作流（用户-AI 协作）
 
@@ -340,16 +351,17 @@ builtin_knowledge.md
 `validate_layout()` 在检测到 bounding_box 重叠时，按以下顺序判断：
 
 ```
-
-检测到重叠 (x_overlap > 0.01 AND y_overlap > 0.01)
+检测到重叠 (x_overlap > tolerance AND y_overlap > tolerance)
+│   tolerance = max(0.05, max(stroke_a, stroke_b) * 0.55)
+│   其中 0.05 = Manim 默认 stroke_width=4 points / 72 ≈ 0.056 的安全下限
+│        0.55 = stroke 接触约 55% 内视为合法（物理图元间容许边界贴合）
 │
 ├─ 第 1 层：显式对象对白名单 (allowed_overlap_pairs)
-│ └─ (obj_a, obj_b) 在列表中? → 跳过 ✅ （人工确认语义相关）
+│   └─ (obj_a, obj_b) 在列表中? → 跳过 ✅ （人工确认语义相关）
 │
 └─ 第 2 层：类型模式自动匹配 (allowed_overlap_patterns)
-└─ A和B的类型组合匹配某个模式? → 跳过 ✅ （按预定义语义关系推断）
-└─ 都不匹配? → 报告 ELEMENT_OVERLAP ❌ （推断为语义无关）
-
+    └─ A和B的类型组合匹配某个模式? → 继续走容差比较（不再一票放行）
+    └─ 都不匹配? → 报告 ELEMENT_OVERLAP ❌ （推断为语义无关）
 ```
 
 **三、内置预定义模式映射表（语义关系 → 类型匹配规则）**
@@ -639,31 +651,32 @@ width, height = LayoutEngine.measure_content_dims(texts)
 - `scripts/`：核心基础设施（布局引擎、验证器、动画组件、物理图元）
 - `templates/`：JSON 模板和配置文件
 
-**⚠️ 强制覆盖规则（最高优先级）**：
+**⚠️ 分层基础设施规则（最高优先级）**：
 
-> **当项目已存在与技能同名的文件时，必须无条件用技能文件覆盖，禁止保留项目自定义版本！**
+> `scripts/` 按"基线 / 扩展"两层管理（详见核心原则 10）：
 >
-> **原因**：`scripts/` 目录下的所有文件是技能核心基础设施，任何自定义改动都会破坏技能的设计约束，导致：
+> - **基线层**：技能版本作为**默认**安装；项目可基于实际需要更新复制后的基线文件（更新后需保持向后兼容：保留 API 入口、保持 LayoutScene 子类可继承）
+> - **扩展层**：项目可按需追加 `create_*` / 工具函数；禁止删除基线函数
+> - **基线保护原因**：布局引擎 / 区域定义 / 校验器 / 字幕滚动器是核心约束链，整体替换会破坏技能的设计契约
 >
-> - 布局崩坏（如绕过 `safe_place()`、使用硬编码坐标）
-> - 字幕区侵入（如手动定位到字幕区）
-> - 图元连接错误（如缺失 `connection_points`）
-> - 验证失效（如跳过 `validate_layout()`）
+> **覆盖与扩展清单**：
 >
-> **覆盖清单**（必须全部覆盖，不可遗漏）：
-> | 文件/目录 | 用途 | 覆盖后禁止修改 |
-> |-----------|------|---------------|
-> | `scripts/layout/` | 布局引擎、区域定义、场景基类 | ✅ 禁止修改 |
-> | `scripts/animation/` | 字幕滚动、动画组件 | ✅ 禁止修改 |
-> | `scripts/physics_graphics.py` | 物理图元工厂函数 | ✅ 禁止修改 |
-> | `scripts/validation/` | 布局验证器、JSON 校验 | ✅ 禁止修改 |
-> | `templates/` | 模板文件 | ⚠️ 可按需调整内容，但保持结构一致 |
+> | 文件/目录 | 类别 | 规则 |
+> |-----------|------|------|
+> | `scripts/layout/` | 基线 | 默认使用技能版本；项目可更新复制后的基线文件，但需保持 API 兼容 |
+> | `scripts/animation/` | 基线 | 默认使用技能版本；项目可更新复制后的基线文件，但需保持 API 兼容 |
+> | `scripts/environment/` | 基线 | CJK 自检 + 引擎探测 + 安装建议（核心原则 11）；项目可更新 |
+> | `scripts/validation/` | 基线 | 默认使用技能版本；项目可更新复制后的基线文件，但需保持 API 兼容 |
+> | `scripts/physics_graphics.py` | 扩展 | 可追加 `create_*` 图元；禁止删除/重命名已有函数 |
+> | `scripts/project_extensions/` | 扩展 | 项目自建（需遵循基线约束：不绕过 `safe_place()`、不硬编码坐标） |
+> | `templates/` | 配置 | 可调整内容，保持结构一致 |
 >
-> **例外情况**（允许扩展，但不可修改核心逻辑）：
+> **扩展原则**（无论基线还是扩展层，新增内容都必须满足）：
 >
-> - 业务逻辑层（如 `content/*.py` 中的场景实现）：允许调用技能 API，但不可绕过约束
-> - 新增物理图元：仅在技能无实现时新增，不得修改已有图元
-> - 自定义工具函数：新增文件，不覆盖现有文件
+> - 不绕过 `safe_place()` / `validate_layout()`
+> - 不硬编码绝对坐标（用 `ZoneConstants.compute()` / `c2p()` 派生）
+> - 不使用 `.next_to()` / `.align_to()` 触碰元素（除标题整组 `move_to(ORIGIN)` 外）
+> - 图元走 VGroup 组装，遵循 `references/physics.md` 量化规则
 
 用户项目的标准目录结构见 `references/project_structure.md`。
 
@@ -691,6 +704,29 @@ width, height = LayoutEngine.measure_content_dims(texts)
 ### 动画组件（`scripts/animation/`）
 
 - `subtitle_scroller.py`：字幕滚动管理器（预计算滚动系统）
+
+### 环境自检模块（`scripts/environment/`）
+
+> 核心原则 11：CJK / LaTeX 引擎自检与安装建议。所有路径在 `LayoutScene.setup()` 钩子中自动执行，**不允许**渲染到一半才报错。
+
+- `__init__.py`：模块导出（`check` / `check_cached` / `install_suggested_commands`）
+- `tex_engine_probe.py`：探测 pdflatex / xelatex / lualatex 可用性 + 版本
+- `cjk_checker.py`：综合自检（CJK 宏包 / 中文字体 / 渲染路径推荐），支持结果缓存
+- `cjk_installer.py`：按平台提供安装命令建议，**默认仅打印不执行**（`auto_install=True` 时 Linux/macOS 才会执行，Windows 拒绝自动安装）
+
+**使用示例**：
+
+```python
+from scripts.environment.cjk_checker import check, RenderPath
+
+report = check(verbose=True)
+if report.render_path == RenderPath.TEX_MINIPAGE:
+    # 走 minipage 渲染（xelatex + xeCJK + 中文字体齐全）
+    scene.use_minipage_path()
+elif report.render_path == RenderPath.TEXT_PANGO_ONLY:
+    # 走 Text (Pango)，_wrap_text_object 已处理换行
+    scene.use_text_fallback()
+```
 
 ### 字幕区扩展规范（`scripts/layout/constants.py`）
 

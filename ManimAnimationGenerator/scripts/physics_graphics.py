@@ -128,13 +128,15 @@ CIRCUIT_COLORS = {
     "path_green": "#66FFAA",  # 通路高亮（绿）
     "short_yellow": "#FFDD66",  # 短路警示（黄）
     "break_red": "#FF4444",  # 断路标记（红）
-    "force_G": "#66FFAA",  # 重力（绿）
-    "force_N": "#66DDFF",  # 支持力/弹力（蓝）
-    "force_f": "#FF6666",  # 摩擦力（红）
-    "force_F": "#FFDD66",  # 外力/推力（黄）
-    "force_T": "#A855F7",  # 拉力/张力（紫）
-    "force_buoyancy": "#06B6D4",  # 浮力（青）
-    "force_combined": "#9CA3AF",  # 合力（中灰）
+    # 修复 P0-C：力矢量颜色严格遵循 references/physics.md 15.2.1 力-色固定映射表
+    # 力学域内最小色相差 51°，确保多力共存时高辨识度
+    "force_G": "#EF4444",  # 重力 G（红，H:0°）
+    "force_N": "#3B82F6",  # 支持力 N（蓝，H:217°）
+    "force_f": "#EAB308",  # 摩擦力 f（黄，H:51°）
+    "force_F": "#22C55E",  # 外力/推力 F（绿，H:142°
+    "force_T": "#A855F7",  # 拉力/张力 T（紫，H:272°）
+    "force_buoyancy": "#06B6D4",  # 浮力（青，H:188°）
+    "force_combined": "#9CA3AF",  # 合力（中灰，无彩 S:7%）
 }
 
 

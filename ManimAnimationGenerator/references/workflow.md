@@ -64,7 +64,7 @@
       "content": "错误猜测：按位相乘",
       "visual_action": "show_wrong_guess",
       "speech": "有人可能会以为矩阵乘法是相同位置直接相乘，但这是错误的。",
-      "duration": 6.0
+      "duration": 7.0
     },
     {
       "id": "mat_mul_definition",
@@ -72,7 +72,7 @@
       "content": "(AB)_{ij} = Σ_k A_{ik} B_{kj}",
       "visual_action": "highlight_dot_product",
       "speech": "结果矩阵第 i 行 j 列等于 A 的第 i 行与 B 的第 j 列的点积。",
-      "duration": 6.0
+      "duration": 8.0
     }
   ]
 }

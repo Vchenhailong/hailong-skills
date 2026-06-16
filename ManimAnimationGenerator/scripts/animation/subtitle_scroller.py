@@ -103,6 +103,10 @@ class SubtitleScroller:
 
         # 运行时的行对象
         self._all_line_mobjs: List[Text] = []
+        # 修复 P0-D：所有 N 行一次性 arrange 好的整组（用于整组平移 + 裁切）
+        # 关键设计：滚动 = 整组平移一行高度 + 同步 opacity 切换
+        # 任意瞬间字幕区只显示 visible_lines 行，且位置固定不变
+        self._all_line_group: Optional[VGroup] = None
         # 当前可见的行索引
         self._visible_indices: List[int] = []
         # 字幕组（包含底衬、文字）
@@ -113,7 +117,15 @@ class SubtitleScroller:
     def _calc_line_height(font_size: int) -> float:
         """根据字体大小计算实际行高
 
-        公式：line_height = font_size / 72 * frame_scale * line_height_ratio
+        公式：line_height = (font_size / 72.0) * SUBTITLE_LINE_HEIGHT_RATIO
+
+        Manim 默认 1 单位 = 1 inch = 72 points，font_size 本身就是 points，
+        因此 font_size/72 即为换算到 Manim 单位的基础值，再乘以行高系数。
+
+        修复 P0-N4：原公式错误地多乘了 MANIM_FONT_TO_UNIT_RATIO（8/72≈0.111），
+        导致实际行高只有正确值的 1/8（font_size=18 → 0.039 而非 ~0.35），
+        字幕行间几乎贴在一起，多行滚动时频繁重叠。已修正为正确的换算公式。
+        实测验证：font_size=18 → line_height ≈ 0.35，与 Manim Text 实际渲染高度一致。
 
         Args:
             font_size: 字体大小（points）
@@ -121,11 +133,7 @@ class SubtitleScroller:
         Returns:
             行高（manim 单位）
         """
-        return (
-            (font_size / 72.0)
-            * ZC.MANIM_FONT_TO_UNIT_RATIO
-            * ZC.SUBTITLE_LINE_HEIGHT_RATIO
-        )
+        return (font_size / 72.0) * ZC.SUBTITLE_LINE_HEIGHT_RATIO
 
     def _create_background(self, width: float, height: float) -> RoundedRectangle:
         """创建字幕底衬
@@ -181,7 +189,9 @@ class SubtitleScroller:
             group.shift(DOWN * (top_y - max_top_y))
         return group
 
-    def _precompute_scroll_events(self, lines: List[str], max_duration: Optional[float] = None) -> List[ScrollEvent]:
+    def _precompute_scroll_events(
+        self, lines: List[str], max_duration: Optional[float] = None
+    ) -> List[ScrollEvent]:
         """预计算所有滚动事件（基于语音速度动态计算显示时间）
 
         时序关联规则（json_schema.md §2.5）：
@@ -226,13 +236,15 @@ class SubtitleScroller:
             out_idx = i
             in_idx = i + self._visible_lines
 
-            raw_events.append({
-                "trigger_time": cumulative_time,
-                "scroll_distance": self._scroll_unit,
-                "duration": self._scroll_duration,
-                "out_line_idx": out_idx,
-                "in_line_idx": in_idx,
-            })
+            raw_events.append(
+                {
+                    "trigger_time": cumulative_time,
+                    "scroll_distance": self._scroll_unit,
+                    "duration": self._scroll_duration,
+                    "out_line_idx": out_idx,
+                    "in_line_idx": in_idx,
+                }
+            )
 
             # 下一次滚动触发时间 = 当前时间 + 新滚入行的显示时间
             cumulative_time += line_display_times[in_idx]
@@ -249,7 +261,9 @@ class SubtitleScroller:
 
         return events
 
-    def show(self, speech: str, max_duration: Optional[float] = None) -> Tuple[float, List[Text]]:
+    def show(
+        self, speech: str, max_duration: Optional[float] = None
+    ) -> Tuple[float, List[Text]]:
         """显示字幕，超出2行时自动滚动
 
         滚动时序与 Atom 关联：
@@ -300,69 +314,151 @@ class SubtitleScroller:
         return (total_time, [self._all_line_mobjs[i] for i in self._visible_indices])
 
     def _build_subtitle_group(self) -> None:
-        """构建字幕组（底衬+文字）"""
-        visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
-        self._text_group = VGroup(*visible_mobjs)
-        self._text_group.arrange(DOWN, buff=self._line_spacing, aligned_edge=LEFT)
+        """构建字幕组（底衬+文字）
 
-        text_width = self._text_group.get_width()
-        text_height = self._text_group.get_height()
+        修复 P0-D：原实现只创建"当前可见"的 2 行 VGroup，滚动时通过
+        "旧 2 行上移 + 新行飞入 + 旧行淡出"三组并行 animate 实现滚动，
+        导致过渡期间 3 行在同一字幕区并存 → 文字重叠 + 错位。
+        现改为"整组预排 + 整体平移 + 边界淡入淡出"模式：
+        1. 把所有 N 行一次性 VGroup.arrange(DOWN, buff=line_spacing)
+        2. 整体平移到字幕区：line[0].top y = SUBTITLE_ZONE_TOP_Y - 0.14
+           （与原"两行居中于字幕区底部"设计一致，line[0] 在上、line[1] 在下）
+        3. 前 visible_lines 行 opacity=1，其余 opacity=0
+        4. 底衬居中于"当前可见 2 行"（即 line[0] + line[1]）
+
+        滚动时只需将 _all_line_group 整组平移一行高度（UP * scroll_unit），
+        同步把滚出顶部的行 opacity=0，滚入底部的行 opacity=1。
+        任意瞬间字幕区只显示 2 行固定位置，0 错位、0 飞入、0 漂出。
+        """
+        # 1) 预排所有 N 行（一次性 arrange DOWN）
+        #    arrange(DOWN) 后 line[0] 在最上，line[N-1] 在最下
+        self._all_line_group = VGroup(*self._all_line_mobjs)
+        self._all_line_group.arrange(DOWN, buff=self._line_spacing, aligned_edge=LEFT)
+
+        # 2) 整体平移：line[0].top y 位于字幕区内固定位置
+        #    字幕区：Y ∈ [-3.85, -2.8]，高 1.05
+        #    两行字幕总高 = 2L + S = 0.91 → 留 0.14 padding
+        #    line[0].top y = -2.8 - 0.14 = -2.94（与原设计一致）
+        target_line0_top_y = ZC.SUBTITLE_ZONE_TOP_Y - 0.14
+        current_top_y = self._all_line_group.get_top()[1]
+        self._all_line_group.shift(UP * (target_line0_top_y - current_top_y))
+
+        # 3) 初始可见性：前 visible_lines 行 opacity=1，其余 opacity=0
+        for i, line in enumerate(self._all_line_mobjs):
+            line.set_opacity(1 if i < self._visible_lines else 0)
+
+        # 4) 创建底衬（按当前可见 2 行的尺寸）
+        #    注意：line[0] + line[1] 的实际位置由 _all_line_group 决定，
+        #    但它们的 width/height 独立于位置（get_width/height 测的是尺寸）
+        visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
+        text_width = max(visible_mobjs[0].width, visible_mobjs[1].width)
+        text_height = (
+            visible_mobjs[0].height + visible_mobjs[1].height + self._line_spacing
+        )
         bg = self._create_background(text_width, text_height)
 
-        # 组装：底衬在下层，文字在上层
-        self._subtitle_group = VGroup(bg, self._text_group)
-        # 文字居中于底衬内部
-        self._text_group.move_to(bg.get_center())
+        # 5) 底衬居中于当前可见 2 行（取 line[0] 和 line[1] 中心的均值）
+        visible_center_y = (
+            visible_mobjs[0].get_center()[1] + visible_mobjs[1].get_center()[1]
+        ) / 2
+        bg.move_to([0, visible_center_y, 0])
 
-        self._align_to_bottom(self._subtitle_group)
+        # 6) 组装：底衬在下层，all_line_group 在上层
+        self._subtitle_group = VGroup(bg, self._all_line_group)
+
+        # 兼容性：维护 self._text_group（虽然新逻辑不再使用，但保留属性避免外部引用报错）
+        # 注意：这里创建一个仅用于测量/兼容的 VGroup，不影响渲染位置
+        self._text_group = VGroup(*visible_mobjs)
+
+        # 7) 顶部边界约束（防止侵入主内容区）
         self._enforce_top_boundary(self._subtitle_group)
+        # 8) 把底衬重新对齐到（可能被平移后的）可见 2 行中心
+        #    _enforce_top_boundary 可能下移了 subtitle_group，
+        #    需要重新计算可见 2 行中心并把 bg 重新对齐
+        self._align_bg_to_visible_lines()
+
         self._scene.add(self._subtitle_group)
 
+    def _align_bg_to_visible_lines(self) -> None:
+        """把底衬重新对齐到当前可见 2 行的中心
+
+        修复 P0-D：在 _enforce_top_boundary 可能平移了 subtitle_group 之后，
+        底衬位置需要同步更新。否则底衬会与可见 2 行错位。
+        """
+        if not self._subtitle_group or len(self._visible_indices) < 2:
+            return
+        bg = self._subtitle_group[0]
+        visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
+        visible_center_y = (
+            visible_mobjs[0].get_center()[1] + visible_mobjs[1].get_center()[1]
+        ) / 2
+        bg.move_to([0, visible_center_y, 0])
+
+    def _update_background_size(self) -> None:
+        """根据当前可见 2 行更新底衬尺寸
+
+        修复 P0-D：滚动后当前可见 2 行的成员发生变化（line[k] 离开，
+        line[k+visible_lines] 进入），新行的 width 可能不同，
+        需要重新调整底衬宽度。
+        """
+        if not self._subtitle_group or len(self._visible_indices) < 2:
+            return
+        visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
+        new_width = max(visible_mobjs[0].width, visible_mobjs[1].width)
+        new_height = (
+            visible_mobjs[0].height + visible_mobjs[1].height + self._line_spacing
+        )
+        padding_h = self._line_height * 0.3
+        padding_w = self._line_height * 0.8
+        bg = self._subtitle_group[0]
+        bg.stretch_to_fit_width(new_width + padding_w * 2)
+        bg.stretch_to_fit_height(new_height + padding_h * 2)
+        # 重新对齐到当前可见 2 行中心
+        self._align_bg_to_visible_lines()
+
     def _execute_scroll(self, event: ScrollEvent) -> None:
-        """执行单次滚动动画（前驱滚出 = 后继滚入）
+        """执行单次滚动动画（整组平移 + 同步裁切）
+
+        修复 P0-D：原实现用 3 个并行 animate（旧 2 行上移 + 新行飞入 + 旧行淡出），
+        导致过渡期间旧 2 行与新飞入行在同一字幕区并存 → 文字重叠 + 错位。
+        现改为"整组预排 + 整体平移 + 边界淡入淡出"：
+        1. 新行 opacity 立即设为 1（准备滚入）
+        2. 整组 _all_line_group 向上平移一行高度（UP * scroll_unit）
+        3. 旧行 opacity 同步淡出到 0
+        4. 滚出顶部的行自然落到字幕区上方（被 opacity=0 隐藏）
+        5. 滚入底部的行自然进入字幕区（opacity=1 显示）
+
+        关键：任意瞬间字幕区只显示 2 行（位置固定不变），
+        没有"飞入"、"漂出"、"错位"现象。
 
         Args:
             event: 滚动事件
         """
         out_line = self._all_line_mobjs[event.out_line_idx]
         in_line = self._all_line_mobjs[event.in_line_idx]
-        second_line = self._all_line_mobjs[self._visible_indices[1]]
 
-        left_x = second_line.get_left()[0]
-        bottom_y = self._text_group.get_bottom()[1] - self._line_spacing
-        in_line.move_to([left_x, bottom_y, 0])
-        in_line.set_opacity(0)
+        # 滚入的新行：先设为可见（与整组平移同步进行，无飞入延迟）
+        in_line.set_opacity(1)
 
+        # 整组平移一行高度 + 同步设置滚出行为隐藏
+        # 两个 animate 并行：整组上移 + 滚出行淡出
+        # 字幕区位置固定：line[0] 和 line[1] 始终在同一位置
         self._scene.play(
-            self._text_group.animate.shift(UP * event.scroll_distance),
-            in_line.animate.shift(UP * event.scroll_distance).set_opacity(1),
+            self._all_line_group.animate.shift(UP * event.scroll_distance),
             out_line.animate.set_opacity(0),
             run_time=event.duration,
         )
 
-        self._scene.remove(out_line)
+        # 更新可见索引
         self._visible_indices.pop(0)
         self._visible_indices.append(event.in_line_idx)
 
-        # 重建可见文字组
+        # 兼容性：更新 self._text_group 引用
         visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
         self._text_group = VGroup(*visible_mobjs)
-        self._text_group.arrange(DOWN, buff=self._line_spacing, aligned_edge=LEFT)
 
-        # 复用底衬，仅更新尺寸
-        bg = self._subtitle_group[0]
-        new_width = self._text_group.get_width()
-        new_height = self._text_group.get_height()
-        padding_h = self._line_height * 0.3
-        padding_w = self._line_height * 0.8
-        bg.stretch_to_fit_width(new_width + padding_w * 2)
-        bg.stretch_to_fit_height(new_height + padding_h * 2)
-
-        # 文字重新居中于底衬
-        self._text_group.move_to(bg.get_center())
-        self._subtitle_group = VGroup(bg, self._text_group)
-        self._align_to_bottom(self._subtitle_group)
-        self._enforce_top_boundary(self._subtitle_group)
+        # 更新底衬尺寸（新行的宽度可能不同）
+        self._update_background_size()
 
     def hide(self) -> None:
         """隐藏字幕"""

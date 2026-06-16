@@ -68,20 +68,25 @@ class LayoutEngine:
     """
 
     @staticmethod
-    def measure_content_dims(mobjs: list) -> Tuple[float, float]:
+    def measure_content_dims(
+        mobjs: list,
+        buff: float = ZoneConstants.ROW_BUFF,
+    ) -> Tuple[float, float]:
         """实时测量内容对象的实际宽高
 
-        使用 Manim Mobject 的 .width 和 .height 属性实时获取实际尺寸，
-        替代静态预估，确保布局决策基于精确数据。
+        使用 VGroup.arrange(DOWN, buff=buff) 模拟真实堆叠后再测量，
+        替代纯包围盒的测量方式，确保布局决策基于真实堆叠尺寸。
+        符合 SKILL.md M2：仅用 VGroup.arrange() 布局。
 
         Args:
             mobjs: 要测量的 Mobject 列表
+            buff: 元素间垂直间距（默认 ZoneConstants.ROW_BUFF）
 
         Returns:
             (total_width, total_height): 内容的总宽度和总高度
             - 对于垂直排列：total_height = Σ 各元素高度 + (n-1) × buff
             - 对于水平排列：total_width = Σ 各元素宽度 + (n-1) × buff
-            - 实际返回的是包围盒尺寸（VGroup 的 width/height）
+            - 实际返回的是 arrange 后 VGroup 的 width/height
 
         示例::
 
@@ -93,7 +98,8 @@ class LayoutEngine:
         if not mobjs:
             return 0.0, 0.0
 
-        temp_group = VGroup(*mobjs)
+        # 必须先 arrange 才返回真实堆叠尺寸（修复 P0-1）
+        temp_group = VGroup(*mobjs).arrange(DOWN, buff=buff, aligned_edge=LEFT)
         return temp_group.width, temp_group.height
 
     @staticmethod
