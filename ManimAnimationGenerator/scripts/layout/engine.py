@@ -98,7 +98,7 @@ class LayoutEngine:
         if not mobjs:
             return 0.0, 0.0
 
-        # 必须先 arrange 才返回真实堆叠尺寸
+        # 必须先 arrange 才返回真实堆叠尺寸（修复 P0-1）
         temp_group = VGroup(*mobjs).arrange(DOWN, buff=buff, aligned_edge=LEFT)
         return temp_group.width, temp_group.height
 

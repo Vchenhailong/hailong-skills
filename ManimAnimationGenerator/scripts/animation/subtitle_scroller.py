@@ -1,34 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-字幕滚动管理器 - 预计算滚动系统
+字幕滚动管理器 - 预置位 + UpdateFromAlphaFunc 模式
 
-核心设计：
-1. 字体大小 ↔ 行高 精确关联（动态计算，防重叠/遮盖）
-2. 预计算滚动时序、距离、时长（所有参数提前计算好）
-3. 前驱行与后继行联动滚动（速度、间距一致）
-4. 底部固定位置（防止多行字幕抖动）
-5. 字幕底衬（自适应半透明背景）
+设计原则（对应 references/subtitle_scroller.md）：
+1. 可见字幕最多 2 行，每行不超过 20 字
+2. 字幕速度 4 字/秒
+3. 滚动时：旧第1行消失，旧第2行移入原第1行位置，新行移入原第2行位置
+4. 滚动时长和行间距全程一致
 
-字体大小 ↔ 行高 换算公式：
-- Manim 中 font_size 单位是 points，1 inch = 72 points
-- 默认帧高 8 单位对应 8 inches
-- line_height = font_size / 72 * frame_scale * line_height_ratio
-- font_size=18 → line_height ≈ 0.29 单位
+核心实现：
+- 所有行在 _prepare 时就放在最终位置上（slot_0_y 或 slot_1_y）
+- 用 UpdateFromAlphaFunc(alpha=0→1) 驱动动画：
+  - 旧第1行：opacity 1→0，y 不变（原地淡出）
+  - 旧第2行：opacity 1→1（保持），y slot_1_y→slot_0_y（上移）
+  - 新  行：opacity 0→1，y slot_1_y→slot_1_y（从 slot_1_y 开始，淡入）
+- 滚动期间新行停在 slot_1_y（不额外偏移），旧第1行原地淡出
+- 动画结束后新行就在 slot_1_y，无需回调修正
+- 不依赖任何 callback / slot 引用
 """
 
-from manim import (
-    Scene,
-    VGroup,
-    Text,
-    RoundedRectangle,
-    UP,
-    DOWN,
-    LEFT,
-    FadeOut,
-)
+from manim import Scene, VGroup, Text, UP, DOWN
 from typing import List, Optional, Tuple
 from dataclasses import dataclass
+import numpy as np
 from scripts.layout.zones.subtitle_zone import SubtitleZone
 from scripts.layout.constants import ZoneConstants as ZC
 from scripts.subtitle_splitter import split_utterance
@@ -36,477 +31,236 @@ from scripts.subtitle_splitter import split_utterance
 
 @dataclass
 class ScrollEvent:
-    """预计算的滚动事件"""
-
-    # 触发时间（秒）
     trigger_time: float
-    # 滚动距离（单位）
-    scroll_distance: float
-    # 动画时长（秒）
     duration: float
-    # 滚出的行索引
-    out_line_idx: int
-    # 滚入的行索引
     in_line_idx: int
 
 
 class SubtitleScroller:
-    """字幕滚动管理器（预计算滚动系统）
+    """
+    字幕滚动管理器（预置位 + alpha 驱动模式）
 
-    职责：
-    1. 字体大小 ↔ 行高精确关联
-    2. 预计算所有滚动事件（时序、距离、时长）
-    3. 管理字幕行创建、排列、滚动动画
-    4. 字幕底衬视觉设计（自适应半透明背景）
+    与 references/subtitle_scroller.md 对照：
+    - 最多 2 行可见，每行 ≤ 20 字（chars_per_line）
+    - 速度 4 字/秒（_speech_speed）
+    - 滚动触发时机：读完当前屏（2行）的字符总时间
+    - 滚动动画：旧第1行消失，旧第2行移入原第1行，新行移入原第2行
+    - 滚动时长一致（_scroll_duration）
     """
 
     def __init__(
         self,
         scene: Scene,
         subtitle_zone: SubtitleZone,
-        font_size: int = ZC.SUBTITLE_FONT_SIZE,
-        chars_per_line: int = 35,
+        font_size: int = 18,
+        chars_per_line: int = ZC.SUBTITLE_CHARS_PER_LINE,
     ):
-        """初始化字幕滚动管理器
-
-        Args:
-            scene: Manim 场景实例
-            subtitle_zone: 字幕区容器
-            font_size: 字幕字号（默认 18）
-            chars_per_line: 每行最大字符数
-        """
         self._scene = scene
         self._zone = subtitle_zone
         self._font_size = font_size
         self._chars_per_line = chars_per_line
-
-        # 可见行数（固定2行）
-        self._visible_lines = ZC.SUBTITLE_VISIBLE_LINES
-        # 滚动动画过渡时长（仅控制滚动动画平滑度，不决定显示时间）
         self._scroll_duration = ZC.SUBTITLE_SCROLL_DURATION
-        # 语音朗读速度（字符/秒），用于计算每行显示时间
         self._speech_speed = ZC.SUBTITLE_SPEECH_SPEED
-        # 底衬样式
-        self._bg_color = ZC.SUBTITLE_BACKGROUND_COLOR
-        self._bg_opacity = ZC.SUBTITLE_BACKGROUND_OPACITY
-        # 字幕颜色
         self._text_color = ZC.SUBTITLE_TEXT_COLOR
-        # 底部固定位置
-        self._bottom_fixed_y = ZC.SUBTITLE_ZONE_BOTTOM_FIXED_Y
 
-        # 动态计算行高（字体大小 → 行高）
-        self._line_height = self._calc_line_height(font_size)
-        # 动态计算行间距（基于行高的比例）
+        # 行高
+        self._line_height = (font_size / 72.0) * ZC.SUBTITLE_LINE_HEIGHT_RATIO
         self._line_spacing = self._line_height * ZC.SUBTITLE_LINE_SPACING_RATIO
-        # 滚动单位 = 行高 + 行间距
-        self._scroll_unit = self._line_height + self._line_spacing
+        self._row_pitch = self._line_height + self._line_spacing
 
-        # 运行时的行对象
-        self._all_line_mobjs: List[Text] = []
-        # 所有 N 行一次性 arrange 好的整组（用于整组平移 + 裁切）
-        # 关键设计：滚动 = 整组平移一行高度 + 同步 opacity 切换
-        # 任意瞬间字幕区只显示 visible_lines 行，且位置固定不变
-        self._all_line_group: Optional[VGroup] = None
-        # 当前可见的行索引
-        self._visible_indices: List[int] = []
-        # 字幕组（包含底衬、文字）
-        self._subtitle_group: Optional[VGroup] = None
-        self._text_group: Optional[VGroup] = None
+        # 槽位坐标
+        zone_center_y = (subtitle_zone.y_min + subtitle_zone.y_max) / 2
+        self._slot_0_y = zone_center_y + self._row_pitch / 2  # 上行
+        self._slot_1_y = zone_center_y - self._row_pitch / 2  # 下行
 
-    @staticmethod
-    def _calc_line_height(font_size: int) -> float:
-        """根据字体大小计算实际行高
+        # 字幕行
+        self._all_lines: List[Text] = []
+        self._scroll_events: List[ScrollEvent] = []
+        self._last_tick_time = 0.0
+        self._speech_start_time = 0.0
 
-        公式：line_height = (font_size / 72.0) * SUBTITLE_LINE_HEIGHT_RATIO
+    # ─────────────────────────────────────────────────────────────────
+    # 公开 API
+    # ─────────────────────────────────────────────────────────────────
 
-        Manim 默认 1 单位 = 1 inch = 72 points，font_size 本身就是 points，
-        因此 font_size/72 即为换算到 Manim 单位的基础值，再乘以行高系数。
-        实测验证：font_size=18 → line_height ≈ 0.35，与 Manim Text 实际渲染高度一致。
+    def show(self, speech: str, max_duration: Optional[float] = None) -> Tuple[float, List[Text]]:
+        """显示字幕（串行播放，与主内容并发时用 build_subtitle_animation）"""
+        anim = self.build_subtitle_animation(speech, max_duration=max_duration)
+        duration = self.total_duration
+        self._scene.play(anim, run_time=duration)
+        return duration, [self._all_lines[0], self._all_lines[1]]
 
-        Args:
-            font_size: 字体大小（points）
+    def build_subtitle_animation(self, speech: str, max_duration: Optional[float] = None):
+        """返回 Succession 动画对象，可与主内容并发播放
 
-        Returns:
-            行高（manim 单位）
+        字幕总时长 = 所有字符的朗读时间（字符数 / 4.0 字/秒）
+                  + 滚动动画总时长（滚动次数 × scroll_duration）
         """
-        return (font_size / 72.0) * ZC.SUBTITLE_LINE_HEIGHT_RATIO
-
-    def _create_background(self, width: float, height: float) -> RoundedRectangle:
-        """创建字幕底衬
-
-        底衬大小根据文字内容动态计算，确保完全包裹。
-
-        Args:
-            width: 文字宽度
-            height: 文字高度
-
-        Returns:
-            底衬 RoundedRectangle
-        """
-        padding_h = self._line_height * 0.3
-        padding_w = self._line_height * 0.8
-
-        bg = RoundedRectangle(
-            width=width + padding_w * 2,
-            height=height + padding_h * 2,
-            corner_radius=ZC.SUBTITLE_BACKGROUND_CORNER_RADIUS,
-            stroke_width=0,
-            fill_color=self._bg_color,
-            fill_opacity=self._bg_opacity,
-        )
-        return bg
-
-    def _align_to_bottom(self, group: VGroup) -> VGroup:
-        """将字幕组底部对齐到固定位置（防抖动）
-
-        Args:
-            group: 字幕组
-
-        Returns:
-            已调整位置的对象
-        """
-        current_bottom = group.get_bottom()[1]
-        if abs(current_bottom - self._bottom_fixed_y) > 0.001:
-            group.shift(DOWN * (current_bottom - self._bottom_fixed_y))
-        return group
-
-    def _enforce_top_boundary(self, group: VGroup) -> VGroup:
-        """强制执行字幕上界约束（防止侵入主内容区）
-
-        Args:
-            group: 字幕组
-
-        Returns:
-            已调整位置的对象
-        """
-        top_y = group.get_top()[1]
-        max_top_y = ZC.SUBTITLE_ZONE_TOP_Y
-        if top_y > max_top_y:
-            group.shift(DOWN * (top_y - max_top_y))
-        return group
-
-    def _precompute_scroll_events(
-        self, lines: List[str], max_duration: Optional[float] = None
-    ) -> List[ScrollEvent]:
-        """预计算所有滚动事件（基于语音速度动态计算显示时间）
-
-        时序关联规则（json_schema.md §2.5）：
-        - 原始触发时间基于 SPEECH_SPEED（4字符/秒）计算
-        - 若提供了 max_duration 且原始总时间 > max_duration，
-          则对所有 trigger_time 进行等比缩放，确保滚动在 Atom 生命周期内完成
-
-        Args:
-            lines: 所有字幕行的文本内容列表
-            max_duration: Atom 总时长上限（秒），用于约束滚动时序
-
-        Returns:
-            滚动事件列表
-        """
-        events = []
-        # 需要滚动的次数 = 总行数 - 可见行数
-        scroll_count = len(lines) - self._visible_lines
-        if scroll_count <= 0:
-            return events
-
-        # 计算每行的显示时间（基于字符数 / 语音速度）
-        def calc_display_time(text: str) -> float:
-            """根据文本字符数计算朗读显示时间，最短保底 1.5 秒"""
-            char_count = len(text.strip())
-            if char_count == 0:
-                return 1.5
-            return max(char_count / self._speech_speed, 1.5)
-
-        line_display_times = [calc_display_time(line) for line in lines]
-
-        # 累积时间：每次滚动后，新滚入的行需要完整显示
-        # 第 0 次（初始）：前 visible_lines 行同时显示，取其中最长的一行作为首屏停留时间
-        cumulative_time = (
-            max(line_display_times[: self._visible_lines])
-            if self._visible_lines > 0
-            else 3.0
-        )
-
-        raw_events = []
-        for i in range(scroll_count):
-            # 本次滚出的行索引和滚入的行索引
-            out_idx = i
-            in_idx = i + self._visible_lines
-
-            raw_events.append(
-                {
-                    "trigger_time": cumulative_time,
-                    "scroll_distance": self._scroll_unit,
-                    "duration": self._scroll_duration,
-                    "out_line_idx": out_idx,
-                    "in_line_idx": in_idx,
-                }
-            )
-
-            # 下一次滚动触发时间 = 当前时间 + 新滚入行的显示时间
-            cumulative_time += line_display_times[in_idx]
-
-        # ── 时序缩放：若总时间超限，等比压缩 ──
-        total_raw_time = cumulative_time
-        if max_duration is not None and total_raw_time > max_duration:
-            scale_factor = max_duration / total_raw_time
-            for ev in raw_events:
-                ev["trigger_time"] *= scale_factor
-
-        for ev in raw_events:
-            events.append(ScrollEvent(**ev))
-
-        return events
-
-    def show(
-        self, speech: str, max_duration: Optional[float] = None
-    ) -> Tuple[float, List[Text]]:
-        """显示字幕，超出2行时自动滚动
-
-        滚动时序与 Atom 关联：
-        - 所有滚动事件的 trigger_time 以 max_duration 为上限进行缩放
-        - 若未提供 max_duration，则使用预计算的语音速度时间（可能超过 Atom 生命周期）
-
-        Args:
-            speech: 语音文本
-            max_duration: 该 Atom 的总时长（秒），用于约束滚动时序。
-                         当计算出的总滚动时间 > max_duration 时，
-                         等比压缩每个触发时间，确保滚动在 Atom 结束前完成。
-
-        Returns:
-            (总滚动时间, 可见字幕对象列表)
-        """
-        # ── 生命周期清理：先移除上一轮的字幕组（幂等，无残留时 no-op）──
-        self.hide()
-
-        # 1. 拆分文本为行
-        lines = split_utterance(speech, max_chars=self._chars_per_line)
-
-        # 2. 创建所有行对象
-        self._all_line_mobjs = [
-            Text(line_text, font_size=self._font_size, color=self._text_color)
-            for line_text in lines
-        ]
-
-        # 3. 初始化可见索引
-        self._visible_indices = list(range(min(self._visible_lines, len(lines))))
-
-        # 4. 预计算滚动事件（基于字符数动态计算显示时间，支持 max_duration 缩放）
-        scroll_events = self._precompute_scroll_events(lines, max_duration=max_duration)
-
-        # 5. 构建字幕组
-        self._build_subtitle_group()
-
-        # 6. 逐个触发滚动事件
-        total_time = 0.0
-        for event in scroll_events:
-            # 等待触发时间
-            if event.trigger_time - total_time > 0.01:
-                self._scene.wait(event.trigger_time - total_time)
-            total_time = event.trigger_time
-
-            # 执行滚动动画
-            self._execute_scroll(event)
-
-        return (total_time, [self._all_line_mobjs[i] for i in self._visible_indices])
-
-    def _build_subtitle_group(self) -> None:
-        """构建字幕组（底衬+文字）
-
-        采用"整组预排 + 整体平移 + 边界淡入淡出"模式：
-        1. 把所有 N 行一次性 VGroup.arrange(DOWN, buff=line_spacing)
-        2. 整体平移到字幕区：line[0].top y = SUBTITLE_ZONE_TOP_Y - 0.14
-           （与原"两行居中于字幕区底部"设计一致，line[0] 在上、line[1] 在下）
-        3. 前 visible_lines 行 opacity=1，其余 opacity=0
-        4. 底衬居中于"当前可见 2 行"（即 line[0] + line[1]）
-
-        滚动时只需将 _all_line_group 整组平移一行高度（UP * scroll_unit），
-        同步把滚出顶部的行 opacity=0，滚入底部的行 opacity=1。
-        任意瞬间字幕区只显示 2 行固定位置，0 错位、0 飞入、0 漂出。
-        """
-        # 1) 预排所有 N 行（一次性 arrange DOWN）
-        #    arrange(DOWN) 后 line[0] 在最上，line[N-1] 在最下
-        self._all_line_group = VGroup(*self._all_line_mobjs)
-        self._all_line_group.arrange(DOWN, buff=self._line_spacing, aligned_edge=LEFT)
-
-        # 2) 整体平移：line[0].top y 位于字幕区内固定位置
-        #    字幕区：Y ∈ [-3.85, -2.8]，高 1.05
-        #    两行字幕总高 = 2L + S = 0.91 → 留 0.14 padding
-        #    line[0].top y = -2.8 - 0.14 = -2.94（与原设计一致）
-        target_line0_top_y = ZC.SUBTITLE_ZONE_TOP_Y - 0.14
-        current_top_y = self._all_line_group.get_top()[1]
-        self._all_line_group.shift(UP * (target_line0_top_y - current_top_y))
-
-        # 3) 初始可见性：前 visible_lines 行 opacity=1，其余 opacity=0
-        for i, line in enumerate(self._all_line_mobjs):
-            line.set_opacity(1 if i < self._visible_lines else 0)
-
-        # 4) 创建底衬（按当前可见 2 行的尺寸）
-        #    注意：line[0] + line[1] 的实际位置由 _all_line_group 决定，
-        #    但它们的 width/height 独立于位置（get_width/height 测的是尺寸）
-        visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
-        text_width = max(visible_mobjs[0].width, visible_mobjs[1].width)
-        text_height = (
-            visible_mobjs[0].height + visible_mobjs[1].height + self._line_spacing
-        )
-        bg = self._create_background(text_width, text_height)
-
-        # 5) 底衬居中于当前可见 2 行（取 line[0] 和 line[1] 中心的均值）
-        visible_center_y = (
-            visible_mobjs[0].get_center()[1] + visible_mobjs[1].get_center()[1]
-        ) / 2
-        bg.move_to([0, visible_center_y, 0])
-
-        # 6) 组装：底衬在下层，all_line_group 在上层
-        self._subtitle_group = VGroup(bg, self._all_line_group)
-
-        # 兼容性：维护 self._text_group（虽然新逻辑不再使用，但保留属性避免外部引用报错）
-        # 注意：这里创建一个仅用于测量/兼容的 VGroup，不影响渲染位置
-        self._text_group = VGroup(*visible_mobjs)
-
-        # 7) 顶部边界约束（防止侵入主内容区）
-        self._enforce_top_boundary(self._subtitle_group)
-        # 8) 把底衬重新对齐到（可能被平移后的）可见 2 行中心
-        #    _enforce_top_boundary 可能下移了 subtitle_group，
-        #    需要重新计算可见 2 行中心并把 bg 重新对齐
-        self._align_bg_to_visible_lines()
-
-        self._scene.add(self._subtitle_group)
-
-    def _align_bg_to_visible_lines(self) -> None:
-        """把底衬重新对齐到当前可见 2 行的中心
-
-        在 _enforce_top_boundary 可能平移了 subtitle_group 之后，
-        底衬位置需要同步更新，否则底衬会与可见 2 行错位。
-        """
-        if not self._subtitle_group or len(self._visible_indices) < 2:
-            return
-        bg = self._subtitle_group[0]
-        visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
-        visible_center_y = (
-            visible_mobjs[0].get_center()[1] + visible_mobjs[1].get_center()[1]
-        ) / 2
-        bg.move_to([0, visible_center_y, 0])
-
-    def _update_background_size(self) -> None:
-        """根据当前可见 2 行更新底衬尺寸
-
-        滚动后当前可见 2 行的成员发生变化（line[k] 离开，
-        line[k+visible_lines] 进入），新行的 width 可能不同，
-        需要重新调整底衬宽度。
-        """
-        if not self._subtitle_group or len(self._visible_indices) < 2:
-            return
-        visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
-        new_width = max(visible_mobjs[0].width, visible_mobjs[1].width)
-        new_height = (
-            visible_mobjs[0].height + visible_mobjs[1].height + self._line_spacing
-        )
-        padding_h = self._line_height * 0.3
-        padding_w = self._line_height * 0.8
-        bg = self._subtitle_group[0]
-        bg.stretch_to_fit_width(new_width + padding_w * 2)
-        bg.stretch_to_fit_height(new_height + padding_h * 2)
-        # 重新对齐到当前可见 2 行中心
-        self._align_bg_to_visible_lines()
-
-    def _compute_background_target(
-        self, in_line_idx: int
-    ) -> Tuple[float, float, float]:
-        """计算滚入新行后底衬的目标尺寸和中心 Y 坐标
-
-        动画开始前预计算新底衬目标，与位移/opacity 同步进行动画。
-
-        Args:
-            in_line_idx: 即将滚入的行索引
-
-        Returns:
-            (new_width, new_height, new_center_y) 三元组
-        """
-        # 模拟"滚入后"的可见 2 行索引：[in_line_idx - visible_lines + 1, in_line_idx]
-        new_visible_indices = [
-            in_line_idx - self._visible_lines + 1 + k
-            for k in range(self._visible_lines)
-        ]
-        visible_mobjs = [self._all_line_mobjs[i] for i in new_visible_indices]
-        new_width = max(m.width for m in visible_mobjs)
-        new_height = sum(m.height for m in visible_mobjs) + self._line_spacing * (
-            self._visible_lines - 1
-        )
-        # 中心 Y：考虑整组平移后，新可见 2 行的实际中心位置
-        # 整组平移 in_line_scroll_distance 后，新可见行 [in_idx - vis + 1, in_idx]
-        # 的中心 = (它们当前中心) + scroll_distance
-        current_centers = [m.get_center()[1] for m in visible_mobjs]
-        new_center_y = sum(current_centers) / len(current_centers)
-        return new_width, new_height, new_center_y
-
-    def _execute_scroll(self, event: ScrollEvent) -> None:
-        """执行单次滚动动画（整组平移 + 同步裁切 + 底衬尺寸同步）
-
-        采用"整组预排 + 整体平移 + 边界淡入淡出"：
-        1. 新行 opacity 在动画前重置为 0（避免飞入前的"已可见"现象）
-        2. 整组 _all_line_group 向上平移一行高度（UP * scroll_unit）
-        3. 旧行 opacity 同步淡出到 0
-        4. 新行 opacity 同步淡入到 1（与位移同步淡入，
-           避免在原位置"突然可见"再"飞入"到目标位置）
-        5. 底衬尺寸在动画内同步调整（避免动画期间底衬变形）
-
-        关键：任意瞬间字幕区只显示 2 行（位置固定不变），
-        没有"飞入"、"漂出"、"错位"现象。
-
-        Args:
-            event: 滚动事件
-        """
-        out_line = self._all_line_mobjs[event.out_line_idx]
-        in_line = self._all_line_mobjs[event.in_line_idx]
-
-        in_line.set_opacity(0)
-
-        # 动画前预计算底衬目标尺寸，作为 animate 的一部分
-        new_bg_w, new_bg_h, new_bg_y = self._compute_background_target(
-            event.in_line_idx
-        )
-        bg = self._subtitle_group[0]
-        padding_h = self._line_height * 0.3
-        padding_w = self._line_height * 0.8
-        target_bg_w = new_bg_w + padding_w * 2
-        target_bg_h = new_bg_h + padding_h * 2
-
-        # 整组平移一行高度 + 同步设置滚出/滚入行的透明度 + 底衬尺寸同步
-        # 四个 animate 并行：整组上移 + 滚出行淡出 + 滚入行淡入 + 底衬缩放
-        # 字幕区位置固定：line[0] 和 line[1] 始终在同一位置
-        self._scene.play(
-            self._all_line_group.animate.shift(UP * event.scroll_distance),
-            out_line.animate.set_opacity(0),
-            in_line.animate.set_opacity(1),
-            bg.animate.stretch_to_fit_width(target_bg_w).stretch_to_fit_height(
-                target_bg_h
-            ),
-            run_time=event.duration,
-        )
-
-        # 更新可见索引
-        self._visible_indices.pop(0)
-        self._visible_indices.append(event.in_line_idx)
-
-        # 兼容性：更新 self._text_group 引用
-        visible_mobjs = [self._all_line_mobjs[i] for i in self._visible_indices]
-        self._text_group = VGroup(*visible_mobjs)
-
-        self._align_bg_to_visible_lines()
+        from manim import Succession, Wait
+        self._prepare(speech)
+        n = len(self._all_lines)
+        if n == 0:
+            self._total_duration = max_duration or 1.0
+            return Wait(run_time=self._total_duration)
+
+        char_count = sum(len(l.text) for l in self._all_lines)
+        speech_duration = char_count / self._speech_speed
+        scroll_duration_total = len(self._scroll_events) * self._scroll_duration
+        self._total_duration = speech_duration + scroll_duration_total
+
+        if not self._scroll_events:
+            return Wait(run_time=max(0.1, self._total_duration))
+
+        return self._build_succession()
+
+    @property
+    def total_duration(self) -> float:
+        return getattr(self, "_total_duration", 0.0)
 
     def hide(self) -> None:
-        """隐藏字幕"""
-        if self._subtitle_group:
-            self._scene.play(FadeOut(self._subtitle_group))
-            self._scene.remove(self._subtitle_group)
-            self._subtitle_group = None
+        for line in self._all_lines:
+            if line in self._scene.mobjects:
+                self._scene.remove(line)
+        self._all_lines = []
+        self._scroll_events = []
 
-    @property
-    def line_height(self) -> float:
-        """获取当前字体大小对应的行高"""
-        return self._line_height
+    # ─────────────────────────────────────────────────────────────────
+    # 内部实现
+    # ─────────────────────────────────────────────────────────────────
 
-    @property
-    def scroll_unit(self) -> float:
-        """获取滚动单位（行高 + 行间距）"""
-        return self._scroll_unit
+    def _prepare(self, speech: str) -> None:
+        """准备字幕：拆分 + 创建 Text + 预置位"""
+        self.hide()
+        lines = split_utterance(speech, max_chars=self._chars_per_line)
+        if not lines:
+            return
+
+        self._all_lines = [
+            Text(t, font_size=self._font_size, color=self._text_color)
+            for t in lines
+        ]
+
+        # 预置位：每行放在它最终显示的槽位上（slot_0_y 或 slot_1_y）
+        # L0 → slot_0, L1 → slot_1
+        # 滚动发生后：L1 → slot_0, L2 → slot_1, ...
+        # 滚动前的行：按 (i % 2) 决定在 slot_0 还是 slot_1
+        for i, line in enumerate(self._all_lines):
+            slot_y = self._slot_0_y if (i % 2 == 0) else self._slot_1_y
+            line.move_to([0.0, slot_y, 0.0])
+
+        # 初始时只显示前 2 行（L0 → slot_0, L1 → slot_1）
+        # 后续行虽然也在 scene 中，但 opacity=0（不可见）
+        # 注意：必须把所有行都 add 到 scene，这样 UpdateFromAlphaFunc 才能工作
+        self._scene.add(*self._all_lines)
+        # 前 visible_lines 之外的全部设为 opacity=0
+        for i, line in enumerate(self._all_lines):
+            if i >= 2:
+                line.set_opacity(0)
+
+        # 预计算滚动事件
+        line_char_counts = [len(l.text) for l in self._all_lines]
+        scroll_count = len(lines) - 2
+        events = []
+        cumulative = 0.0
+        for i in range(scroll_count):
+            # 滚动 i 在读完 L0 到 L_i 后触发
+            # 每次累加当前行 L_i 的字符数
+            cumulative += line_char_counts[i]
+            events.append(ScrollEvent(
+                trigger_time=cumulative / self._speech_speed,
+                duration=self._scroll_duration,
+                in_line_idx=i + 2,  # 新行索引 = L_{i+2}
+            ))
+        self._scroll_events = events
+
+    def _build_succession(self):
+        """构建 Succession：初始保持 + 滚动动画"""
+        from manim import Succession, AnimationGroup, Wait, FadeIn, UpdateFromAlphaFunc
+
+        animations = []
+        events = self._scroll_events
+        scroll_dur = self._scroll_duration
+
+        # 跟踪当前可见行
+        visible_lines = [
+            (self._all_lines[0], self._slot_0_y),
+            (self._all_lines[1], self._slot_1_y),
+        ]
+
+        # 初始：前两行已通过 _prepare 设置 opacity=1，这里只是确保它们正确显示
+        # 用 AnimationGroup 把初始 FadeIn（瞬间完成）和 Wait 并发
+        if events:
+            first_t = events[0].trigger_time
+            init_group = AnimationGroup(
+                FadeIn(self._all_lines[0], run_time=0.01),
+                FadeIn(self._all_lines[1], run_time=0.01),
+                Wait(run_time=first_t) if first_t > 0.01 else Wait(run_time=0.01),
+            )
+            animations.append(init_group)
+
+        for ev in events:
+            old_top, old_top_y = visible_lines[0]
+            old_bot, old_bot_y = visible_lines[1]
+            new_line = self._all_lines[ev.in_line_idx]
+
+            # 新行从 slot_1 下方淡入，避免与旧行抢位
+            new_line.move_to([0.0, self._slot_1_y, 0.0])
+            new_line.set_opacity(0)
+
+            # 1) 旧 slot_0：淡出并下移出可视区，避免与后序上移行叠影
+            hide_y = self._slot_1_y - self._row_pitch
+            fade_out_anim = UpdateFromAlphaFunc(
+                old_top,
+                lambda m, alpha, _sy=old_top_y, _hy=hide_y: (
+                    m.set_y(_sy + (_hy - _sy) * alpha).set_opacity(1 - alpha)
+                ),
+                run_time=scroll_dur,
+            )
+
+            # 2) 旧 slot_1：上移到 slot_0
+            move_up_anim = UpdateFromAlphaFunc(
+                old_bot,
+                lambda m, alpha, _sy=old_bot_y, _ty=self._slot_0_y: (
+                    m.set_y(_sy + (_ty - _sy) * alpha).set_opacity(1)
+                ),
+                run_time=scroll_dur,
+            )
+
+            # 3) 新行：从 slot_1_y - delta 淡入并微微上移到 slot_1_y
+            delta = self._row_pitch * 0.5
+            new_start_y = self._slot_1_y - delta
+            new_end_y = self._slot_1_y
+            fade_in_anim = UpdateFromAlphaFunc(
+                new_line,
+                lambda m, alpha, _sy=new_start_y, _ey=new_end_y: (
+                    m.move_to([0.0, _sy + (_ey - _sy) * alpha, 0.0]).set_opacity(alpha)
+                ),
+                run_time=scroll_dur,
+            )
+
+            # 并发组：3 件事同时进行
+            group = AnimationGroup(
+                fade_out_anim,
+                move_up_anim,
+                fade_in_anim,
+            )
+            animations.append(group)
+
+            # 更新可见行
+            visible_lines = [(old_bot, self._slot_0_y), (new_line, self._slot_1_y)]
+
+            # 滚动之间等待
+            idx = events.index(ev)
+            if idx + 1 < len(events):
+                next_t = events[idx + 1].trigger_time
+                wait_t = next_t - ev.trigger_time - scroll_dur
+                if wait_t > 0.05:
+                    animations.append(Wait(run_time=wait_t))
+
+        # 最后字幕结束后停留
+        last_ev = events[-1]
+        end_t = last_ev.trigger_time + scroll_dur
+        if self._total_duration > end_t:
+            animations.append(Wait(run_time=self._total_duration - end_t))
+
+        return Succession(*animations)

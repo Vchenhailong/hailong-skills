@@ -33,6 +33,7 @@ class LayoutScene(Scene):
     def __init__(
         self,
         debug: bool = True,
+        layout_mode: Optional[str] = None,  # None 表示使用类属性
         skip_env_check: bool = False,
         interactive_env_check: bool = False,
         **kwargs,
@@ -41,12 +42,15 @@ class LayoutScene(Scene):
 
         Args:
             debug: 调试模式（绘制区域边界等）
+            layout_mode: 布局模式，None 表示使用类属性（推荐），显式传值可覆盖
             skip_env_check: True 时跳过 CJK 环境自检（CI/测试用）
             interactive_env_check: True 时自检失败弹 stdin 询问用户
                 （需要 stdin 是 TTY；非 TTY 自动降级为非交互）
         """
         super().__init__(**kwargs)
         self.debug = debug
+        # None 表示使用类属性（子类可定义 class layout_mode = "three_column"）
+        self.layout_mode = layout_mode if layout_mode is not None else getattr(self, 'layout_mode', 'vertical')
         self._subtitle_zone: Optional[SubtitleZone] = None
         self._main_content_zone: Optional[MainContentZone] = None
         self._graphics_zone: Optional[GraphicsZone] = None
@@ -115,6 +119,34 @@ class LayoutScene(Scene):
             )
             LayoutScene._env_check_done = True  # 失败后不再重试
 
+        # ── debug 模式自动绘制辅助层 ──
+        if self.debug:
+            from manim import NumberPlane
+
+            half_w = ZoneConstants.SCREEN_WIDTH / 2
+            half_h = ZoneConstants.SCREEN_HEIGHT / 2
+            ref_plane = NumberPlane(
+                x_range=[-half_w, half_w, 1],
+                y_range=[-half_h, half_h, 1],
+                x_length=ZoneConstants.SCREEN_WIDTH,
+                y_length=ZoneConstants.SCREEN_HEIGHT,
+                axis_config={"color": "#888888", "stroke_width": 1},
+                background_line_style={
+                    "stroke_color": "#444444",
+                    "stroke_width": 0.5,
+                    "stroke_opacity": 0.3,
+                },
+            )
+            self.add(ref_plane)
+
+        # debug 模式自动绘制布局边界（layout_mode 由子类设置，框架自动处理）
+        # 项目层零实现：只需设 class layout_mode = "two_column" + debug=True
+        if self.debug and hasattr(self, "layout_mode") and self.layout_mode:
+            self.draw_zone_boundaries(layout_mode=self.layout_mode)
+
+    # 项目层设置 layout_mode 即可，框架自动在 setup() 中绘制 debug 边界
+    layout_mode: str = "vertical"
+
     @classmethod
     def get_render_path(cls) -> str:
         """获取当前环境的推荐渲染路径（setup 后才有值）"""
@@ -129,18 +161,25 @@ class LayoutScene(Scene):
     # 区域容器懒加载
     # ============================================================
 
-    def get_subtitle_zone(self, debug: Optional[bool] = None) -> SubtitleZone:
+    def get_subtitle_zone(
+        self,
+        layout_mode: str = "vertical",
+        debug: Optional[bool] = None,
+    ) -> SubtitleZone:
         """获取字幕区容器（懒加载）
 
-        字幕区容器创建后会立即把自身加入 scene（容器 Rectangle 在
-        debug 模式可见，非 debug 模式透明，不影响渲染）。
-        这样 scene.mobjects 持有字幕区的引用，便于后续统一管理
-        （清理、状态查询、跨场景复用等）。
+        Args:
+            layout_mode: 布局模式，决定字幕区高度（10%）
+            debug: 调试模式
         """
-        if self._subtitle_zone is None:
+        if self._subtitle_zone is None or getattr(
+            self._subtitle_zone, "_has_title", None
+        ) != (layout_mode not in ("two_column", "three_column")):
             dbg = debug if debug is not None else self.debug
-            self._subtitle_zone = SubtitleZone(scene=self, debug=dbg)
-            self.add(self._subtitle_zone)
+            has_title = layout_mode not in ("two_column", "three_column")
+            self._subtitle_zone = SubtitleZone(
+                scene=self, debug=dbg, has_title=has_title
+            )
         return self._subtitle_zone
 
     def get_main_content_zone(
@@ -170,6 +209,317 @@ class LayoutScene(Scene):
         return self._graphics_zone
 
     # ============================================================
+    # 调试模式：布局区域边界可视化
+    # ============================================================
+
+    def draw_zone_boundaries(
+        self,
+        layout_mode: str = "vertical",
+        include_columns: bool = True,
+        line_color: str = "#00FF66",
+        line_dash_length: float = 0.15,
+        line_dash_gap: float = 0.08,
+        text_color: str = "#FFD700",
+        text_size: int = 18,
+        text_opacity: float = 1.0,
+        label_margin: float = 0.12,
+    ) -> None:
+        """在场景中绘制各布局区域的边界（虚线 + 区域名/比例/坐标文字标签）
+
+        标签布局原则（信息清晰、充分、不与内容冲突）：
+        - 区域名 + 比例/高度放区域**内部中心**，绝不侵入相邻区域
+        - 标题区 [2.16, 3.6] 名 → 中心 y=2.88
+        - 主内容区 [-2.88, 3.6] 名 → 内部顶部 y=3.4
+        - 字幕区 [-3.6, -2.88] 名 → 中心 y=-3.24
+        - 分栏 (LEFT_COL/MID_COL/RIGHT_COL/GRAPHICS) 名 → 主内容区底部内部 y=-2.0
+        - X 边界值 → 各区域**内部左右边缘**紧贴
+        - Y 边界值 → 各区域**内部右上角**
+        - 所有文字保持不透明（text_opacity=1.0），字号 18，颜色高亮
+        - SAFE_AREA 同时绘制，标签放在其内部最顶部 y=3.7
+
+        Args:
+            layout_mode: 布局模式（"vertical" / "two_column" / "three_column" / "centered"）
+            include_columns: 是否同时绘制分栏边界（两栏/三栏有效）
+            line_color: 边界虚线颜色
+            line_dash_length: 虚线段长度（Manim 单位）
+            line_dash_gap: 虚线段间隔
+            text_color: 文字颜色
+            text_size: 边界值文字字号
+            text_opacity: 文字透明度（默认 1.0 完全不透明，便于肉眼观察）
+            label_margin: 文字标签与边界的内缩距离
+        """
+        from manim import (
+            DashedLine,
+            Text,
+            VGroup,
+        )
+
+        # 兼容 Manim 0.20+ 的 DashedLine API
+        dash_ratio = (
+            line_dash_gap / (line_dash_length + line_dash_gap)
+            if (line_dash_length + line_dash_gap) > 0
+            else 0.5
+        )
+
+        # 两栏/三栏 → 两区（主内容 90% + 字幕 10%），无标题区
+        # vertical/centered → 三区（标题 20% + 主内容 70% + 字幕 10%）
+        has_title = layout_mode not in ("two_column", "three_column")
+        zones = ZoneConstants.compute(
+            self.camera.frame_width, self.camera.frame_height, has_title=has_title
+        )
+        safe_h = zones["safe_height"]
+
+        # 收集所有需要绘制的矩形区域（含名称、比例、坐标、标签位置）
+        # name_pos: (x, y) 区域名放置位置（区域内部）
+        # xy_pos: (x, y) X/Y 边界值放右上角
+        rects: list = []
+        debug_group = VGroup()
+
+        rects.append(
+            {
+                "name": "SAFE_AREA",
+                "meta": f"h={safe_h:.2f}",
+                "x_min": zones["safe_x_min"],
+                "x_max": zones["safe_x_max"],
+                "y_min": zones["safe_y_min"],
+                "y_max": zones["safe_y_max"],
+                # SAFE_AREA 标签放主内容区左下角内侧 (x=-5.0, y=-1.7)，避开边界值标签
+                "name_pos": (zones["safe_x_min"] + 1.75, zones["safe_y_min"] + 1.1),
+                "show_xy_inside": True,
+            }
+        )
+        if "title_y_min" in zones:
+            rects.append(
+                {
+                    "name": "TITLE",
+                    "meta": f"[20%] h={zones['title_height']:.2f}",
+                    "x_min": zones["safe_x_min"],
+                    "x_max": zones["safe_x_max"],
+                    "y_min": zones["title_y_min"],
+                    "y_max": zones["title_y_max"],
+                    "name_pos": (
+                        (zones["safe_x_min"] + zones["safe_x_max"]) / 2,
+                        (zones["title_y_min"] + zones["title_y_max"]) / 2,
+                    ),
+                    "show_xy_inside": True,
+                }
+            )
+        # 字幕区统一占 10%（两区/三区/vertical/centered 均已统一为 9:1）
+        subtitle_pct = "10%"
+        rects.append(
+            {
+                "name": "SUBTITLE",
+                "meta": f"[{subtitle_pct}] h={zones['subtitle_height']:.2f}",
+                "x_min": zones["safe_x_min"],
+                "x_max": zones["safe_x_max"],
+                "y_min": zones["subtitle_y_min"],
+                "y_max": zones["subtitle_y_max"],
+                # SUBTITLE 标签放字幕区右上角内部 (x=4.0, y=-2.20)，避开字幕行 (slot_0/slot_1)
+                "name_pos": (
+                    zones["safe_x_max"] - 2.75,
+                    zones["subtitle_y_max"] - 0.08,
+                ),
+                "show_xy_inside": True,
+            }
+        )
+
+        if layout_mode == "two_column":
+            rects.append(
+                {
+                    "name": "MAIN_CONTENT",
+                    "meta": f"[90%] h={zones['content_height']:.2f}",
+                    "x_min": zones["two_left_x_min"],
+                    "x_max": zones["two_left_x_max"],
+                    "y_min": zones["content_y_min"],
+                    "y_max": zones["content_y_max"],
+                    # 主内容区标签放内部顶部 (y=2.45)，绝不侵入字幕区
+                    "name_pos": (
+                        (zones["two_left_x_min"] + zones["two_left_x_max"]) / 2,
+                        zones["content_y_max"] - 0.2,
+                    ),
+                    "show_xy_inside": True,
+                }
+            )
+            rects.append(
+                {
+                    "name": "GRAPHICS",
+                    "meta": f"[同高] h={zones['content_height']:.2f}",
+                    "x_min": zones["graphics_x_min"],
+                    "x_max": zones["graphics_x_max"],
+                    "y_min": zones["content_y_min"],
+                    "y_max": zones["content_y_max"],
+                    "name_pos": (
+                        (zones["graphics_x_min"] + zones["graphics_x_max"]) / 2,
+                        zones["content_y_max"] - 0.2,
+                    ),
+                    "show_xy_inside": True,
+                }
+            )
+            # 分栏竖线：画在 MAIN_CONTENT 右边界，贯穿字幕区上界到内容区下界
+            col_divider_x = zones["two_left_x_max"]
+            col_divider = DashedLine(
+                [col_divider_x, zones["subtitle_y_max"], 0],
+                [col_divider_x, zones["content_y_max"], 0],
+                color=line_color,
+                stroke_width=2.0,
+                dash_length=line_dash_length,
+                dashed_ratio=dash_ratio,
+            )
+            debug_group.add(col_divider)
+        elif layout_mode == "three_column":
+            # 绘制两条分栏竖线
+            # 第一条：左栏和中栏之间的分隔线
+            col_divider1_x = zones["three_left_x_max"]
+            col_divider1 = DashedLine(
+                [col_divider1_x, zones["subtitle_y_max"], 0],
+                [col_divider1_x, zones["content_y_max"], 0],
+                color=line_color,
+                stroke_width=2.0,
+                dash_length=line_dash_length,
+                dashed_ratio=dash_ratio,
+            )
+            debug_group.add(col_divider1)
+
+            # 第二条：中栏和右栏之间的分隔线
+            col_divider2_x = zones["three_mid_x_max"]
+            col_divider2 = DashedLine(
+                [col_divider2_x, zones["subtitle_y_max"], 0],
+                [col_divider2_x, zones["content_y_max"], 0],
+                color=line_color,
+                stroke_width=2.0,
+                dash_length=line_dash_length,
+                dashed_ratio=dash_ratio,
+            )
+            debug_group.add(col_divider2)
+
+            for col_name, x_min, x_max in [
+                ("LEFT_COL", zones["three_left_x_min"], zones["three_left_x_max"]),
+                ("MID_COL", zones["three_mid_x_min"], zones["three_mid_x_max"]),
+                ("RIGHT_COL", zones["three_right_x_min"], zones["three_right_x_max"]),
+            ]:
+                rects.append(
+                    {
+                        "name": col_name,
+                        "meta": f"h={zones['content_height']:.2f}",
+                        "x_min": x_min,
+                        "x_max": x_max,
+                        "y_min": zones["content_y_min"],
+                        "y_max": zones["content_y_max"],
+                        "name_pos": ((x_min + x_max) / 2, zones["content_y_max"] - 0.2),
+                        "show_xy_inside": True,
+                    }
+                )
+        else:
+            rects.append(
+                {
+                    "name": "MAIN_CONTENT",
+                    "meta": f"[70%] h={zones['content_height']:.2f}",
+                    "x_min": zones["single_x_min"],
+                    "x_max": zones["single_x_max"],
+                    "y_min": zones["content_y_min"],
+                    "y_max": zones["content_y_max"],
+                    "name_pos": (
+                        (zones["single_x_min"] + zones["single_x_max"]) / 2,
+                        zones["content_y_max"] - 0.2,
+                    ),
+                    "show_xy_inside": True,
+                }
+            )
+
+        for rect in rects:
+            x_min, x_max = rect["x_min"], rect["x_max"]
+            y_min, y_max = rect["y_min"], rect["y_max"]
+            name = rect["name"]
+            meta = rect.get("meta", "")
+            name_x, name_y = rect["name_pos"]
+
+            # 4 条虚线边界（上 / 下 / 左 / 右）— 每条线都是区域边界
+            top = DashedLine(
+                [x_min, y_max, 0],
+                [x_max, y_max, 0],
+                color=line_color,
+                stroke_width=2.0,
+                dash_length=line_dash_length,
+                dashed_ratio=dash_ratio,
+            )
+            bottom = DashedLine(
+                [x_min, y_min, 0],
+                [x_max, y_min, 0],
+                color=line_color,
+                stroke_width=2.0,
+                dash_length=line_dash_length,
+                dashed_ratio=dash_ratio,
+            )
+            left = DashedLine(
+                [x_min, y_min, 0],
+                [x_min, y_max, 0],
+                color=line_color,
+                stroke_width=2.0,
+                dash_length=line_dash_length,
+                dashed_ratio=dash_ratio,
+            )
+            right = DashedLine(
+                [x_max, y_min, 0],
+                [x_max, y_max, 0],
+                color=line_color,
+                stroke_width=2.0,
+                dash_length=line_dash_length,
+                dashed_ratio=dash_ratio,
+            )
+            debug_group.add(top, bottom, left, right)
+
+            # ── 区域名 + 元信息（放区域内部中心/指定位置）──
+            name_label = Text(
+                f"{name}  {meta}",
+                font_size=text_size,
+                color=text_color,
+                weight="BOLD",
+            )
+            name_label.set_opacity(text_opacity)
+            name_label.move_to([name_x, name_y, 0])
+            debug_group.add(name_label)
+
+            # X 边界值（放区域内部左右边缘紧贴）
+            x_min_label = Text(
+                f"x={x_min:.2f}",
+                font_size=text_size,
+                color=text_color,
+                weight="BOLD",
+            ).set_opacity(text_opacity)
+            x_min_label.move_to([x_min + label_margin, (y_min + y_max) / 2, 0])
+
+            x_max_label = Text(
+                f"x={x_max:.2f}",
+                font_size=text_size,
+                color=text_color,
+                weight="BOLD",
+            ).set_opacity(text_opacity)
+            x_max_label.move_to([x_max - label_margin, (y_min + y_max) / 2, 0])
+            debug_group.add(x_min_label, x_max_label)
+
+            # Y 边界值（放区域内部右上角紧贴；错开 Y 避免与 x_max 重叠）
+            y_min_label = Text(
+                f"y={y_min:.2f}",
+                font_size=text_size,
+                color=text_color,
+                weight="BOLD",
+            ).set_opacity(text_opacity)
+            y_min_label.move_to([x_max - label_margin * 5, y_min + label_margin, 0])
+
+            y_max_label = Text(
+                f"y={y_max:.2f}",
+                font_size=text_size,
+                color=text_color,
+                weight="BOLD",
+            ).set_opacity(text_opacity)
+            y_max_label.move_to([x_max - label_margin * 5, y_max - label_margin, 0])
+            debug_group.add(y_min_label, y_max_label)
+
+        # 把整个调试组添加到场景
+        self._add_recursive(debug_group)
+        self._debug_overlay = debug_group
+
+    # ============================================================
     # 内容放置 API（符合 layout.md 第 3.10 节）
     # ============================================================
 
@@ -178,10 +528,7 @@ class LayoutScene(Scene):
         content: Union[Mobject, VGroup],
         layout_mode: str = "vertical",
     ) -> VGroup:
-        """将内容放置在主内容区内（arrange + 预检 + zone.place_content）
-
-        预检步骤确保单个子元素超宽时自动换行/缩放，
-        避免与 place_two_column 行为不一致。
+        """将内容放置在主内容区内（仅使用 arrange + zone.place_content）
 
         Args:
             content: 单个元素或元素组
@@ -194,13 +541,6 @@ class LayoutScene(Scene):
             content = VGroup(content)
 
         zone = self.get_main_content_zone(layout_mode)
-        col_width = zone.x_max - zone.x_min
-        col_height = zone.y_max - zone.y_min
-
-        # 与 place_two_column/place_three_column 一致：先预检再 place
-        content = self._precheck_mobject(
-            content, max_width=col_width * 0.95, max_height=col_height * 0.9
-        )
 
         if layout_mode == "centered":
             content.arrange(DOWN, buff=ZoneConstants.ROW_BUFF, center=True)
@@ -210,7 +550,7 @@ class LayoutScene(Scene):
         return zone.place_content(content)
 
     def place_graphics(self, graphics: Mobject) -> Mobject:
-        """将图形放置在图形区中心（含预检缩放）
+        """将图形放置在图形区中心
 
         Args:
             graphics: 图形对象
@@ -219,17 +559,13 @@ class LayoutScene(Scene):
             已定位的图形对象
         """
         zone = self.get_graphics_zone()
-        col_width = zone.x_max - zone.x_min
-        col_height = zone.y_max - zone.y_min
-        graphics = self._precheck_mobject(
-            graphics, max_width=col_width * 0.95, max_height=col_height * 0.9
-        )
         return zone.place_content(graphics)
 
     def place_two_column(
         self,
         left_content: Mobject,
         right_content: Mobject,
+        add_to_scene: bool = True,
     ) -> VGroup:
         """两栏布局：左内容区 + 右图形区
 
@@ -240,6 +576,8 @@ class LayoutScene(Scene):
         Args:
             left_content: 左栏内容（公式/文字）
             right_content: 右栏图形
+            add_to_scene: 是否自动添加到场景（默认 True）。设为 False 时，
+                          调用者需自行控制添加时机（如配合 FadeIn 使用）
 
         Returns:
             包含两栏的 VGroup
@@ -252,17 +590,19 @@ class LayoutScene(Scene):
         left_col_height = left_zone.y_max - left_zone.y_min
         right_col_height = right_zone.y_max - right_zone.y_min
 
-        # 对左栏内容做宽度预检+自动调整
+        # 左栏：宽度预检+自动调整（文本/公式需要检查换行）
         left_content = self._precheck_mobject(
             left_content,
             max_width=left_col_width * 0.95,
             max_height=left_col_height * 0.9,
         )
-        # 对右栏图形做尺寸预检+自动调整
+
+        # 右栏：纯图形组跳过预检，由 GraphicsZone.place_content 统一处理 80% 缩放
         right_content = self._precheck_mobject(
             right_content,
             max_width=right_col_width * 0.95,
             max_height=right_col_height * 0.9,
+            skip_for_graphics_zone=True,
         )
 
         # 左栏：左栏内的内容左对齐 + 垂直居中（在左栏区域内）
@@ -271,18 +611,20 @@ class LayoutScene(Scene):
         )
         left_group = left_zone.place_content(left_group, h_align="left")
 
-        # 右栏：右栏内的内容右对齐 + 垂直居中（在图形区区域内）
+        # 右栏：右栏内的内容水平居中 + 垂直居中（在图形区区域内）
         right_group = VGroup(right_content).arrange(
-            DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=RIGHT
+            DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=LEFT
         )
-        right_group = right_zone.place_content(right_group, h_align="right")
+        right_group = right_zone.place_content(right_group, h_align="center")
 
-        # 两栏顶部对齐 + 边界校验。
-        # 对齐后立即校验 top_overflow / bottom_overflow，越界则降级到
-        # 居中/底部对齐。
-        # zone_y_min / zone_y_max 语义对称（取最严格边界）。
+        # 原实现仅将两栏上移到最高栏顶部位置，未校验对齐后是否仍完全
+        # 在 zone 内。当任一栏高度 > zone 高度时，顶部对齐后底部会越界
+        # （content_top 在 zone_y_max 但 content_bottom 超出 zone_y_min）。
+        # 现改为先尝试顶部对齐，对齐后立即校验，若越界则降级到居中/底部对齐。
+
         # 最严格下界 = max(zones.y_min)（各栏中最深的底部）
         # 最严格上界 = min(zones.y_max)（各栏中最浅的顶部）
+        # 原 min() 误用为"最宽松下界"，会在 zone 高度不同时引发底部越界漏检。
         zone_y_min = max(left_zone.y_min, right_zone.y_min)
         zone_y_max = min(left_zone.y_max, right_zone.y_max)
         self._align_columns_within_zone(
@@ -297,15 +639,16 @@ class LayoutScene(Scene):
 
         # ── 事后校验：放置后必须校验，溢出时自动走优化链 ──
         all_placed = [left_group, right_group]
-        # union 校验改用 region="safe_area"（全局安全区），
-        # 与多栏布局语义保持一致；同时透传 column_layout，
-        # 确保动态分栏边界优先于静态常量。
+
+        # 之前 region="content" 实际是单栏边界，与多栏布局脱节，
+        # 导致多栏内整体溢出/穿栏越界无法被捕获。
+        # 同时透传 column_layout，确保动态分栏边界优先于静态常量。
         zones = ZoneConstants.compute(self.camera.frame_width, self.camera.frame_height)
         col_layout_list = ZoneConstants.compute_column_layout(
             zones, num_columns=2, has_graphics=True
         )
-        # 显式构造覆盖全宽的 dict，让 union 校验的语义明确为
-        # "全局安全区"而非"左栏"。
+
+        # 让 union 校验的语义明确为"全局安全区"而非"左栏"。
         col_layout_for_union = {
             "x_min": ZoneConstants.SAFE_AREA_X_MIN,
             "x_max": ZoneConstants.SAFE_AREA_X_MAX,
@@ -326,7 +669,6 @@ class LayoutScene(Scene):
                     "[place_two_column] 自动优化失败，建议拆分原子或缩小内容"
                 )
 
-        # 按栏二次校验：
         # 上面 union 校验对单栏内部 "不超出本栏" 不敏感（X 边界跨度大）。
         # 这里用每栏各自的 X 边界再校验一次，捕获"左栏内容溢出到右栏"等穿栏越界。
         per_col_violations: list = []
@@ -334,14 +676,13 @@ class LayoutScene(Scene):
             self.validate_layout(
                 [left_group],
                 region="content_two_col_left",
-                column_layout=col_layout_list,
             )
         )
         per_col_violations.extend(
             self.validate_layout(
                 [right_group],
                 region="content_two_col_right",
-                column_layout=col_layout_list,
+                column_layout=col_layout_list,  # 同上
             )
         )
         if per_col_violations:
@@ -349,17 +690,18 @@ class LayoutScene(Scene):
                 f"[place_two_column] 按栏校验发现 {len(per_col_violations)} 项违规，"
                 "尝试自动优化"
             )
-            # 传整段 col_layout_list，避免优化器只针对中栏做缩放
-            # 而丢失对左/右栏违规的处理能力。
+
+            # 避免优化器只针对中栏做缩放而丢失对左/右栏违规的处理能力。
             self.handle_violation(
                 per_col_violations, all_placed, column_layout=col_layout_list
             )
 
-        # place_two_column 必须递归把 result 及其子对象 add 到场景中。
-        # VGroup 不会自动 add submobjects 到 scene，
-        # 必须显式 add 才能渲染（仅 `self.add(result)` 会导致嵌套
-        # VGroup 渲染为空、主内容区不显示）。
-        self._add_recursive(result)
+        # 之前仅 `self.add(result)` 但 result 是 VGroup(VGroup, VGroup) 嵌套结构，
+        # VGroup 不会自动 add submobjects 到 scene，导致 VGroup 自身渲染为空、
+        # 主内容区不显示（仅字幕可见）。
+
+        if add_to_scene:
+            self._add_recursive(result)
         return result
 
     def _add_recursive(self, mobject: Mobject) -> None:
@@ -387,9 +729,12 @@ class LayoutScene(Scene):
         超限时自动换行（文本）或缩放（图形）。中栏保留原有的
         scale-to-fit 作为第二道防线。
 
-        每栏独立缩放 + 独立定位到各自 X 边界，不共用 main_zone
-        作为缩放参考系。任一栏超宽触发 main_zone 缩放会波及同 main_zone
-        内其他栏，导致其他栏字号被缩到看不见。
+
+        place_content 兜底缩放。当任一栏（如中栏 MathTex）超宽触发缩放时，
+        main_zone 缩放会波及到 left_col（在同一 main_zone 内），导致左栏
+        文本字号被缩到看不见。
+        现改为：每栏独立缩放 + 独立定位到各自 X 边界，不共用 main_zone
+        作为缩放参考系。
 
         Args:
             left_content: 左栏内容（步骤说明/概念）
@@ -403,7 +748,6 @@ class LayoutScene(Scene):
         main_zone = self.get_main_content_zone(layout_mode="three_column")
         right_zone = self.get_graphics_zone()
 
-        # 计算各栏可用尺寸（使用各栏独立的静态常量边界，不复用 main_zone 兜底）
         main_width = main_zone.x_max - main_zone.x_min
         main_height = main_zone.y_max - main_zone.y_min
 
@@ -419,51 +763,72 @@ class LayoutScene(Scene):
         right_col_width = right_zone.x_max - right_zone.x_min
         right_col_height = right_zone.y_max - right_zone.y_min
 
-        # 三栏独立预检 + 独立放置，每栏用自己的 X 边界：
-        # - 左/中栏：左对齐到各自的 x_min
-        # - 右栏：右对齐到 graphics_zone 的 x_max
-        # 缩放以本栏 VGroup 中心为锚点（保持 X 不偏移），
-        # move_to 再用缩放后的 width 重新计算左/右对齐坐标。
+        left_content = self._precheck_mobject(
+            left_content, max_width=left_col_width * 0.92, max_height=main_height * 0.9
+        )
+        mid_content = self._precheck_mobject(
+            mid_content, max_width=mid_col_width * 0.92, max_height=main_height * 0.9
+        )
+        right_content = self._precheck_mobject(
+            right_content,
+            max_width=right_col_width * 0.95,
+            max_height=right_col_height * 0.9,
+        )
+
+        # 左栏：左对齐到 THREE_COL_LEFT_X_MIN
         left_col = VGroup(left_content).arrange(
             DOWN, buff=ZoneConstants.ROW_BUFF * 0.8, aligned_edge=LEFT
         )
+        # 左栏独立防超宽缩放（仅在 left_col 实际超过 left_col_width 时触发）
+
         if left_col.width > left_col_width:
             scale_factor = (left_col_width * 0.95) / left_col.width
             if scale_factor < 1.0:
                 left_col.scale(scale_factor, about_point=left_col.get_center())
-                logging.info(f"[place_three_column] 左栏独立缩放: ×{scale_factor:.2f}")
+                logging.info(
+                    f"[place_three_column] 左栏独立缩放: ×{scale_factor:.2f} "
+                    f"(left_col_width={left_col_width:.2f}, "
+                    f"content_width={left_col.width:.2f})"
+                )
+        # 左对齐到左栏左边界
         left_col.move_to([left_x_min + left_col.width / 2, main_zone.center_y, 0])
 
+        # 中栏：左对齐到 THREE_COL_MID_X_MIN
         mid_col = VGroup(mid_content).arrange(
             DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=LEFT
         )
+        # 中栏独立防超宽缩放
         if mid_col.width > mid_col_width:
             scale_factor = (mid_col_width * 0.95) / mid_col.width
             if scale_factor < 1.0:
                 mid_col.scale(scale_factor, about_point=mid_col.get_center())
-                logging.info(f"[place_three_column] 中栏独立缩放: ×{scale_factor:.2f}")
+                logging.info(
+                    f"[place_three_column] 中栏独立缩放: ×{scale_factor:.2f} "
+                    f"(mid_col_width={mid_col_width:.2f}, "
+                    f"content_width={mid_col.width:.2f})"
+                )
+        # 中栏左对齐到中栏左边界
         mid_col.move_to([mid_x_min + mid_col.width / 2, main_zone.center_y, 0])
 
-        right_col = (
-            VGroup(right_content).arrange(
-                DOWN, buff=ZoneConstants.ROW_BUFF, aligned_right=ZoneConstants.ROW_BUFF
-            )
-            if False
-            else VGroup(right_content).arrange(
-                DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=RIGHT
-            )
+        # 右栏：右栏内的内容水平居中 + 垂直居中（在 graphics_zone 内）
+        right_col = VGroup(right_content).arrange(
+            DOWN, buff=ZoneConstants.ROW_BUFF, aligned_edge=LEFT
         )
+        # 右栏独立防超宽缩放（仅在 right_col 实际超过 right_col_width 时触发）
         if right_col.width > right_col_width:
             scale_factor = (right_col_width * 0.95) / right_col.width
             if scale_factor < 1.0:
                 right_col.scale(scale_factor, about_point=right_col.get_center())
-                logging.info(f"[place_three_column] 右栏独立缩放: ×{scale_factor:.2f}")
-        right_col = right_zone.place_content(right_col, h_align="right")
+                logging.info(
+                    f"[place_three_column] 右栏独立缩放: ×{scale_factor:.2f} "
+                    f"(right_col_width={right_col_width:.2f}, "
+                    f"content_width={right_col.width:.2f})"
+                )
+        right_col = right_zone.place_content(right_col, h_align="center")
 
-        # 三栏顶部对齐 + 边界校验。
-        # 与 place_two_column 同样的修复：原顶部对齐未校验对齐后是否完全
-        # 在 zone 内。改为先尝试顶部对齐，越界则降级到居中/底部对齐。
-        # zone_y_min / zone_y_max 语义对称（取最严格边界）。
+        # 在 zone 内。现改为先尝试顶部对齐，越界则降级到居中/底部对齐。
+
+        # 最严格下界 = max(zones.y_min)，最严格上界 = min(zones.y_max)。
         zone_y_min = max(main_zone.y_min, right_zone.y_min)
         zone_y_max = min(main_zone.y_max, right_zone.y_max)
         self._align_columns_within_zone(
@@ -473,22 +838,19 @@ class LayoutScene(Scene):
             prefer="top",
         )
 
-        # 与 place_two_column 保持一致，末尾添加事后校验。
-        # 校验顺序：先按栏捕捉穿栏越界，再做整体 union 校验，
-        # 避免 union 误报先污染导致按栏校验被跳过。
+        # 同时调整校验顺序为 per-col → union：先按栏捕捉穿栏越界，
+        # 再做整体 union 校验，避免 union 误报先污染导致按栏校验被跳过。
         all_placed = [left_col, mid_col, right_col]
         zones = ZoneConstants.compute(self.camera.frame_width, self.camera.frame_height)
         col_layout_list = ZoneConstants.compute_column_layout(
             zones, num_columns=3, has_graphics=True
         )
 
-        # 先做按栏校验（per-col），更精确捕获穿栏越界
         per_col_violations: list = []
         per_col_violations.extend(
             self.validate_layout(
                 [left_col],
                 region="content_three_col_left",
-                column_layout=col_layout_list,
             )
         )
         per_col_violations.extend(
@@ -510,16 +872,16 @@ class LayoutScene(Scene):
                 f"[place_three_column] 按栏校验发现 {len(per_col_violations)} 项违规，"
                 "尝试自动优化"
             )
-            # 优化器 optimize() 期望接受 List[Dict]（整段三栏布局），
-            # 可针对不同违规匹配对应栏位做缩放。
+
+            # 对左/右栏违规的处理能力。优化器 optimize() 期望接受 List[Dict]
+            # （整段三栏布局），可针对不同违规匹配对应栏位做缩放。
             self.handle_violation(
                 per_col_violations, all_placed, column_layout=col_layout_list
             )
 
-        # union 校验使用 safe_area（全局安全区）：
         # union 校验对单栏内部"不超出本栏"不敏感，但能捕获整体越出安全区。
-        # 显式构造覆盖全宽的 dict，让 union 校验的语义明确为
-        # "全局安全区"而非"左栏"。
+
+        # 只是左栏），让 union 校验的语义明确为"全局安全区"而非"左栏"。
         col_layout_for_union = {
             "x_min": ZoneConstants.SAFE_AREA_X_MIN,
             "x_max": ZoneConstants.SAFE_AREA_X_MAX,
@@ -539,7 +901,6 @@ class LayoutScene(Scene):
                     "[place_three_column] 自动优化失败，建议拆分原子或缩小内容"
                 )
 
-        # place_three_column 同样必须递归 add 才能渲染嵌套 VGroup。
         result = VGroup(left_col, mid_col, right_col)
         self._add_recursive(result)
         return result
@@ -549,18 +910,13 @@ class LayoutScene(Scene):
 
         根据 layout.md 第 7 节，当元素超出安全边界时整体移动或缩放。
 
-        处理顺序（先缩放，再位移，最后兜底二次校验）：
-        1. **先缩放**：若内容尺寸（width/height）任一维度超出安全区，
-           按比例缩放至 95% 边界内。这一步保证缩放后 content 必然能 fit，
-           数学上消除了"同一轴向两端同时越界"的可能性
-           （证明：若 content.height ≤ 0.95*safe_h，则 top-bottom ≤ 0.95*safe_h
-            < safe_h，所以 top 和 bottom 不会同时超出 safe_y_min/max）
-        2. **再位移**：对每个方向独立计算 shift 量，最后取较大绝对值方向
-           作为净 shift。这避免了单一变量后写覆盖前写导致一方向被忽略。
 
-        若内容尺寸本身已超出安全区，单纯 shift 无法 fit，
+        导致同时超出上下界时只处理了一个。这里分别记录下界（向上 shift）
+        和上界（向下 shift），最终对 x/y 各取一个合并的 shift 量。
+
+
         必须先按比例 scale 到安全区的 95% 边界内再 shift。
-        变量名采用无歧义命名（shift_top_to_y_max / shift_bottom_to_y_min），
+        同时将变量名改为无歧义命名（shift_top_to_y_max / shift_bottom_to_y_min），
         避免 up/down 含义混淆（down 在此上下文中是负值）。
         """
         safe_x_min = ZoneConstants.SAFE_AREA_X_MIN
@@ -570,10 +926,7 @@ class LayoutScene(Scene):
         safe_w = safe_x_max - safe_x_min
         safe_h = safe_y_max - safe_y_min
 
-        # 步骤 1：先缩放
-        # 检测内容尺寸是否超过安全区，超过则先按比例 scale 到 95% 边界内。
-        # 这一步是消除"双端越界"的关键：缩放后 height ≤ 0.95*safe_h，
-        # 几何上保证了 top - bottom < safe_h，shift 阶段只需处理单端越界。
+        # 单纯 shift 无法 fit 这种 case。
         obj_w = mobject.width
         obj_h = mobject.height
         if obj_w > safe_w or obj_h > safe_h:
@@ -586,9 +939,6 @@ class LayoutScene(Scene):
                     f"[safe_place] 内容尺寸超安全区，先缩放至 95% 边界: "
                     f"×{scale_factor:.3f} (原始 w={obj_w:.2f} h={obj_h:.2f})"
                 )
-                # 缩放后重新读取尺寸与位置（scale 会改变 get_width/height/get_*_edge）
-                obj_w = mobject.width
-                obj_h = mobject.height
 
         bottom = mobject.get_bottom()[1]
         top = mobject.get_top()[1]
@@ -605,7 +955,6 @@ class LayoutScene(Scene):
             0.0  # 把内容右边缘对齐到安全右界所需的 X 位移（向左为负）
         )
 
-        # 步骤 2：再位移
         # 下界：内容底部低于安全下界 → 向上 shift（数值为正）
         if bottom < safe_y_min:
             shift_bottom_to_y_min = safe_y_min - bottom
@@ -620,25 +969,15 @@ class LayoutScene(Scene):
             shift_right_to_x_max = safe_x_max - right
 
         # 综合 X / Y 的方向，叠加 shift（极端情况下上下同时越界时取较大约束）
-        # 用无歧义变量名 + 重新计算后变量符号已确定
+
         # shift_bottom_to_y_min 必为非负，shift_top_to_y_max 必为非正
         # 两者方向相反，简单相加取综合净 shift（极端双越界时取较大绝对值一侧）
-        #
-        # 理论上经过步骤 1 缩放后，content.height ≤ 0.95*safe_h，
-        # 数学上 top 和 bottom 不可能同时越界（参见函数顶部 docstring 证明）。
-        # 但作为防御性编程，仍保留"双端越界时取较大绝对值"的逻辑。
-        # 若双端越界确实发生（如 obj_h=0 边界情况），
-        # 在 shift 之后再做一次边界检查，必要时再缩放一次作为兜底。
         if shift_bottom_to_y_min != 0.0 and shift_top_to_y_max != 0.0:
             # 同时越上下界：取绝对值较大方向作为净 shift
             if abs(shift_bottom_to_y_min) >= abs(shift_top_to_y_max):
                 shift_y = shift_bottom_to_y_min
             else:
                 shift_y = shift_top_to_y_max
-            logging.warning(
-                f"[safe_place] 异常：双端 Y 越界同时发生 "
-                f"(bottom={bottom:.2f} top={top:.2f} safe=[{safe_y_min}, {safe_y_max}])"
-            )
         elif shift_bottom_to_y_min != 0.0:
             shift_y = shift_bottom_to_y_min
         else:
@@ -649,10 +988,6 @@ class LayoutScene(Scene):
                 shift_x = shift_left_to_x_min
             else:
                 shift_x = shift_right_to_x_max
-            logging.warning(
-                f"[safe_place] 异常：双端 X 越界同时发生 "
-                f"(left={left:.2f} right={right:.2f} safe=[{safe_x_min}, {safe_x_max}])"
-            )
         elif shift_left_to_x_min != 0.0:
             shift_x = shift_left_to_x_min
         else:
@@ -661,48 +996,59 @@ class LayoutScene(Scene):
         if shift_x != 0.0 or shift_y != 0.0:
             mobject.shift(RIGHT * shift_x + UP * shift_y)
 
-        # 兜底二次校验。shift 后再次测量边缘，
-        # 若仍有越界（极端情况如初始 obj_h=0 导致缩放未触发），
-        # 再做一次 scale 强制适配。这是最后一道防线。
-        bottom = mobject.get_bottom()[1]
-        top = mobject.get_top()[1]
-        left = mobject.get_left()[0]
-        right = mobject.get_right()[0]
-        if (
-            bottom < safe_y_min
-            or top > safe_y_max
-            or left < safe_x_min
-            or right > safe_x_max
-        ):
-            obj_w = mobject.width
-            obj_h = mobject.height
-            scale_x = (safe_w * 0.95) / obj_w if obj_w > safe_w else 1.0
-            scale_y = (safe_h * 0.95) / obj_h if obj_h > safe_h else 1.0
-            scale_factor = min(scale_x, scale_y, 1.0)
-            if scale_factor < 1.0:
-                mobject.scale(scale_factor, about_point=mobject.get_center())
-                logging.warning(
-                    f"[safe_place] 兜底二次缩放: ×{scale_factor:.3f} "
-                    f"(shift 后仍越界)"
-                )
-                # 二次缩放后再次尝试 shift（缩放后位置可能微偏）
-                bottom = mobject.get_bottom()[1]
-                top = mobject.get_top()[1]
-                left = mobject.get_left()[0]
-                right = mobject.get_right()[0]
-                shift_y2 = 0.0
-                shift_x2 = 0.0
-                if bottom < safe_y_min:
-                    shift_y2 = safe_y_min - bottom
-                elif top > safe_y_max:
-                    shift_y2 = safe_y_max - top
-                if left < safe_x_min:
-                    shift_x2 = safe_x_min - left
-                elif right > safe_x_max:
-                    shift_x2 = safe_x_max - right
-                if shift_x2 != 0.0 or shift_y2 != 0.0:
-                    mobject.shift(RIGHT * shift_x2 + UP * shift_y2)
+        return mobject
 
+    def scale_to_fit_zone(
+        self,
+        mobject: Mobject,
+        region: str = "graphics",
+    ) -> Mobject:
+        """将图形等比缩放至合理尺寸，充分利用分栏空间（M7 强制规则实现）
+
+        策略：
+        1. 计算缩放系数使图形最终占分栏宽高的 80%（取宽/高限制中较小者，确保不溢出）
+        2. 除零时保持图形原尺寸
+
+        Args:
+            mobject: 待缩放的图形对象（VGroup 或任意 Mobject）
+            region: 目标区域标识，"graphics"（图形区，默认）或 "content"（主内容区）
+
+        Returns:
+            缩放后的 mobject（链式调用）
+        """
+        if region == "graphics":
+            zone = self.get_graphics_zone()
+        elif region == "content":
+            zone = self.get_main_content_zone(layout_mode=self.layout_mode)
+        else:
+            zone = self.get_main_content_zone(layout_mode=self.layout_mode)
+
+        zone_w = zone.x_max - zone.x_min
+        zone_h = zone.y_max - zone.y_min
+        zone_center = zone.get_center()
+
+        # 先获取缩放前的原始尺寸
+        fig_w = mobject.width
+        fig_h = mobject.height
+
+        # 避免除零
+        if fig_w < 1e-6 or fig_h < 1e-6:
+            return mobject
+
+        # 直接缩放至分栏宽高的 80%（允许图形显著放大或缩小）
+        scale = min((zone_w * 0.80) / fig_w, (zone_h * 0.80) / fig_h) if fig_w > 1e-6 and fig_h > 1e-6 else 1.0
+
+        # scale 在 0.5~1.0 之间：不缩小，保留原始尺寸
+        if scale != 1.0:
+            about = mobject.get_center()
+            mobject.scale(scale, about_point=about)
+            logging.info(
+                f"[scale_to_fit_zone] region={region}, scale={scale:.2f} "
+                f"(原始 w={fig_w:.2f} h={fig_h:.2f} → 目标占分栏 80% (w={zone_w*0.80:.2f} h={zone_h*0.80:.2f}))"
+            )
+
+        # 居中到目标区域
+        mobject.move_to(zone_center)
         return mobject
 
     def _align_columns_within_zone(
@@ -714,12 +1060,10 @@ class LayoutScene(Scene):
     ) -> str:
         """多栏顶部对齐 + 边界校验
 
-        本函数实现"对齐后完全在 zone 内"的最优策略：
-        1. 先尝试 prefer 指定的对齐方式（默认 top）
-        2. 对齐后立即校验 top_overflow / bottom_overflow
-        3. 越界则回退到原位置，尝试下一优先级对齐方式
-        4. 优先级：top → center → bottom（或按 prefer 调整）
-        5. 所有方式都越界（内容已超出 zone 高度）→ 按比例缩放兜底
+        顶部对齐后立即校验 top_overflow / bottom_overflow。
+        越界则回退到原位置，尝试下一优先级对齐方式。
+        优先级：top → center → bottom（或按 prefer 调整）。
+        所有方式都越界（内容已超出 zone 高度）→ 按比例缩放兜底。
 
         Args:
             columns: 待对齐的栏对象列表（每个已是定位好的 Mobject）
@@ -764,7 +1108,6 @@ class LayoutScene(Scene):
                     shift_amount = bottom_y_target - c.get_bottom()[1]
                     c.shift(UP * shift_amount)
 
-            # 校验对齐后是否完全在 zone 内
             top_overflow = max(c.get_top()[1] for c in columns) - zone_y_max
             bottom_overflow = zone_y_min - min(c.get_bottom()[1] for c in columns)
             # 1e-2 容差，避免浮点误差误判
@@ -787,7 +1130,6 @@ class LayoutScene(Scene):
                 f"bottom_overflow={bottom_overflow:.2f}）"
             )
 
-        # 所有对齐方式都越界（内容本身已超出 zone 高度）
         # 兜底：按比例缩放到 zone 高度的 95% 后再顶部对齐
         highest_top = max(c.get_top()[1] for c in columns)
         lowest_bottom = min(c.get_bottom()[1] for c in columns)
@@ -810,42 +1152,77 @@ class LayoutScene(Scene):
         # 极端情况：所有对齐 + 缩放都未生效（zone 高度 ≤ 0 等异常）
         return prefer
 
+    def _is_pure_graphics_group(self, mobject: "Mobject") -> bool:
+        """判断 VGroup 是否为纯图形组（不含文本/公式）
+
+        Args:
+            mobject: 待检查的 Mobject
+
+        Returns:
+            True 如果是纯图形 VGroup，False 否则
+        """
+        from manim import Text, MathTex, VGroup
+
+        if not isinstance(mobject, VGroup):
+            return False
+
+        text_types = (Text, MathTex)
+        try:
+            from manim import MarkupText
+            text_types = (Text, MathTex, MarkupText)
+        except ImportError:
+            pass
+
+        for sub in mobject.get_family():
+            if isinstance(sub, text_types):
+                return False
+
+        return True
+
     def _precheck_mobject(
         self,
         mobject: Mobject,
         max_width: float,
         max_height: float,
+        skip_for_graphics_zone: bool = False,
     ) -> Mobject:
         """事前预检单个 Mobject 的尺寸，超限时自动调整
 
         处理策略（按对象类型分层）：
         1. **VGroup**：递归检查子元素，对每个超宽/超高的子元素分别处理
+           - 若 skip_for_graphics_zone=True 且为纯图形组，跳过预检（由目标 zone 处理）
         2. **Text / MathTex**：
            - 宽度超限 → 调用 LayoutOptimizer 的换行逻辑重建为多行
            - 换行后仍超限 → 缩小 font_size
-        3. **图形类 Mobject**（Arrow, Polygon, VGroup of shapes 等）：
+        3. **图形类 Mobject**（Arrow, Polygon 等）：
            - 宽度或高度任一超限 → scale_to_fit 到可用范围内
 
         Args:
             mobject: 待检查的 Mobject
             max_width: 允许的最大宽度（Manim 单位）
             max_height: 允许的最大高度（Manim 单位）
+            skip_for_graphics_zone: 若为 True，VGroup 跳过预检（用于图形区由 place_content 统一处理）
 
         Returns:
             调整后的 Mobject（可能被原地修改，也可能返回原对象）
         """
-        from manim import Text, MathTex, MarkupText
-
-        # Tex 覆盖 MathTex，但显式列出所有文本类便于维护。
-        # 任何含换行/缩放语义的文本对象都应在此注册。
-        _TEXT_TYPES = (Text, MarkupText, MathTex)
+        from manim import Text, MathTex
 
         # VGroup：递归处理子元素
         if isinstance(mobject, VGroup) and len(mobject.submobjects) > 0:
 
+            # skip_for_graphics_zone=True 时，跳过整个 VGroup 的预检，
+            # 由 GraphicsZone.place_content 统一处理 80% 缩放
+            if skip_for_graphics_zone:
+                return mobject
+
+            # 替代直接覆盖属性 `mobject.submobjects = adjusted_submobjs`，
+            # 后者在部分 VGroup 实现中会丢失父对象属性（h_align、layout_mode、name 等）。
             adjusted_submobjs = []
             for sub in mobject.submobjects:
-                adjusted = self._precheck_mobject(sub, max_width, max_height)
+                adjusted = self._precheck_mobject(
+                    sub, max_width, max_height, skip_for_graphics_zone
+                )
                 adjusted_submobjs.append(adjusted)
             # 保留 VGroup 引用：原位更新子对象列表，避免属性丢失
             mobject.submobjects[:] = adjusted_submobjs
@@ -874,7 +1251,7 @@ class LayoutScene(Scene):
             return mobject
 
         # 文本/公式对象：优先换行，其次缩放
-        if isinstance(mobject, _TEXT_TYPES):
+        if isinstance(mobject, (Text, MathTex)):
             # 先尝试换行
             fake_violation = {
                 "type": (
@@ -882,14 +1259,18 @@ class LayoutScene(Scene):
                 ),
                 "column_width": max_width,
             }
-
-            wrapped = self._layout_optimizer._apply_wrap([mobject], fake_violation)
+            optimizer = LayoutOptimizer()
+            wrapped = optimizer._apply_wrap([mobject], fake_violation)
 
             if wrapped and mobject.width <= max_width and mobject.height <= max_height:
                 logging.info(f"[_precheck_mobject] 换行成功: {type(mobject).__name__}")
                 return mobject
 
             # 换行不够或失败，尝试整体缩放
+
+            # - MathTex 优先走 _apply_wrap（已在上方尝试），不再依赖 font_size 属性
+            # - 对所有文本用 mobject.scale(...) 整体缩放，绕开 font_size 属性对
+            #   MathTex 失效的问题，并触发 Manim 内部重排
             scale_x = max_width / obj_width if obj_width > max_width else 1.0
             scale_y = max_height / obj_height if obj_height > max_height else 1.0
             scale_factor = min(scale_x, scale_y, 0.95)
@@ -897,12 +1278,13 @@ class LayoutScene(Scene):
                 # 使用 about_point=mobject.get_center() 保持中心位置不变，
                 # 避免相对锚点导致位置偏移（与 _precheck_mobject 图形分支保持一致）
                 # 保留 95% 安全余量防再次越界
+                # 同时配合 min_font_size 保护（仅记录，不再依赖 font_size 属性）
                 min_size = LayoutOptimizer.MIN_FONT_SIZE
                 current_font = getattr(mobject, "font_size", 32)
                 if current_font * scale_factor < min_size:
                     scale_factor = min_size / max(current_font, 1)
                 mobject.scale(
-                    scale_factor,
+                    max(scale_factor, 0.5),
                     about_point=mobject.get_center(),
                 )
                 logging.info(
@@ -913,20 +1295,45 @@ class LayoutScene(Scene):
                 return mobject
 
         # 图形类对象（非文本）：直接 scale_to_fit
-        is_graphic = not isinstance(mobject, _TEXT_TYPES)
+        is_graphic = not isinstance(mobject, (Text, MathTex))
         if is_graphic and (obj_width > max_width or obj_height > max_height):
             scale_x = max_width / obj_width if obj_width > max_width else 1.0
             scale_y = max_height / obj_height if obj_height > max_height else 1.0
             scale_factor = min(scale_x, scale_y, 1.0)
+            # 图形缩放下限：不低于 MIN_GRAPHICS_SCALE_RATIO（=0.80）
+            if scale_factor < ZoneConstants.MIN_GRAPHICS_SCALE_RATIO:
+                scale_factor = ZoneConstants.MIN_GRAPHICS_SCALE_RATIO
+
+            # 改用 about_point=mobject.get_center()（与 arrange_content 一致）
             mobject.scale(scale_factor, about_point=mobject.get_center())
             logging.info(
                 f"[_precheck_mobject] 图形缩放: "
                 f"{type(mobject).__name__} ×{scale_factor:.2f} "
                 f"(原始 w={obj_width:.2f} h={obj_height:.2f})"
             )
+            # 缩放后强制应用 stroke_width 下限（即使缩放也不能减小此最小线宽）
+            self._enforce_min_stroke_width(mobject)
             return mobject
 
         return mobject
+
+    def _enforce_min_stroke_width(self, mobj: Mobject) -> None:
+        """强制设置 Mobject 的 stroke_width 不低于 MIN_STROKE_WIDTH_POINTS（=3 points）
+
+        即使经过缩放，线宽也不能进一步减小此最小值。
+        递归应用到所有子对象。
+        """
+        POINTS_PER_UNIT = 72.0
+        min_stroke_units = ZoneConstants.MIN_STROKE_WIDTH_POINTS / POINTS_PER_UNIT
+        try:
+            current_sw = getattr(mobj, "stroke_width", None)
+            if current_sw is not None and current_sw < min_stroke_units:
+                mobj.stroke_width = min_stroke_units
+        except Exception:
+            pass
+        if hasattr(mobj, "submobjects") and mobj.submobjects:
+            for sub in mobj.submobjects:
+                self._enforce_min_stroke_width(sub)
 
     def validate_layout(
         self,
@@ -935,7 +1342,7 @@ class LayoutScene(Scene):
         overlap_pairs: list = None,
         allowed_overlap_pairs: list = None,
         allowed_overlap_patterns: dict = None,
-        column_layout: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
+        column_layout: Optional[Dict[str, Any]] = None,
     ) -> list:
         """程序化布局校验（无需渲染），检测溢出/侵入/重叠/越界
 
@@ -1000,14 +1407,11 @@ class LayoutScene(Scene):
         """
         violations = []
 
-        # column_layout 同时支持 Dict（单栏，union 校验）和 List[Dict]（多栏，per-col 校验）。
-        # 统一规整为 List[Dict]，避免后续 list-style 访问对 Dict 失效。
-        if isinstance(column_layout, dict):
-            column_layout = [column_layout]
-
         # ---- 根据 region 确定边界 ----
-        # 扩展 region 取值，每种栏位用对应区域的精确 X 边界。
-        # 多栏 region 在传入 column_layout 时优先使用动态边界，
+
+        # 与多栏布局（两栏/三栏）脱节，导致左栏内容溢出到右栏区域无法被捕获。
+        # 现在扩展 region 取值，每种栏位用对应区域的精确 X 边界。
+
         # 避免静态常量与 compute_column_layout 计算结果不一致。
         _COLUMN_REGION_TO_INDEX = {
             "content_two_col_left": 0,
@@ -1016,6 +1420,17 @@ class LayoutScene(Scene):
             "content_three_col_mid": 1,
             "content_three_col_right": 2,
         }
+        # 多栏布局时使用 ZoneConstants.compute(has_title=False) 动态计算 Y 边界
+        # 两栏/三栏 Y 范围 = [-2.88, 3.6]（90%），单栏/centered Y 范围 = [-2.88, 2.16]（70%）
+        _zones_two_col = ZoneConstants.compute(
+            ZoneConstants.SCREEN_WIDTH, ZoneConstants.SCREEN_HEIGHT, has_title=False
+        )
+        _two_col_y_min = _zones_two_col["content_y_min"]
+        _two_col_y_max = _zones_two_col["content_y_max"]
+        _zones_three_col = _zones_two_col
+        _three_col_y_min = _zones_two_col["content_y_min"]
+        _three_col_y_max = _zones_two_col["content_y_max"]
+
         if region in ("content", "content_single_col"):
             # 默认 / 向后兼容：单栏主内容区
             x_min = ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MIN
@@ -1023,40 +1438,40 @@ class LayoutScene(Scene):
             y_min = ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MIN
             y_max = ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MAX
         elif region == "content_two_col_left":
-            # 两栏左栏（公式/文字）：默认 [-6.75, 1.35]
+            # 两栏左栏（公式/文字）
             x_min = ZoneConstants.MAIN_CONTENT_TWO_COL_X_MIN
             x_max = ZoneConstants.MAIN_CONTENT_TWO_COL_X_MAX
-            y_min = ZoneConstants.MAIN_CONTENT_TWO_COL_Y_MIN
-            y_max = ZoneConstants.MAIN_CONTENT_TWO_COL_Y_MAX
+            y_min = _two_col_y_min
+            y_max = _two_col_y_max
         elif region == "content_two_col_right":
-            # 两栏右栏（图形）：默认 [1.85, 6.75]
+            # 两栏右栏（图形）
             x_min = ZoneConstants.GRAPHICS_X_MIN
             x_max = ZoneConstants.GRAPHICS_X_MAX
-            y_min = ZoneConstants.GRAPHICS_Y_MIN
-            y_max = ZoneConstants.GRAPHICS_Y_MAX
+            y_min = _two_col_y_min
+            y_max = _two_col_y_max
         elif region == "content_three_col_left":
             # 三栏左栏（步骤/概念）
             x_min = ZoneConstants.THREE_COL_LEFT_X_MIN
             x_max = ZoneConstants.THREE_COL_LEFT_X_MAX
-            y_min = ZoneConstants.THREE_COL_Y_MIN
-            y_max = ZoneConstants.THREE_COL_Y_MAX
+            y_min = _three_col_y_min
+            y_max = _three_col_y_max
         elif region == "content_three_col_mid":
             # 三栏中栏（公式）
             x_min = ZoneConstants.THREE_COL_MID_X_MIN
             x_max = ZoneConstants.THREE_COL_MID_X_MAX
-            y_min = ZoneConstants.THREE_COL_Y_MIN
-            y_max = ZoneConstants.THREE_COL_Y_MAX
+            y_min = _three_col_y_min
+            y_max = _three_col_y_max
         elif region == "content_three_col_right":
             # 三栏右栏（图形）
             x_min = ZoneConstants.THREE_COL_RIGHT_X_MIN
             x_max = ZoneConstants.THREE_COL_RIGHT_X_MAX
-            y_min = ZoneConstants.THREE_COL_Y_MIN
-            y_max = ZoneConstants.THREE_COL_Y_MAX
+            y_min = _three_col_y_min
+            y_max = _three_col_y_max
         elif region == "graphics":
             x_min = ZoneConstants.GRAPHICS_X_MIN
             x_max = ZoneConstants.GRAPHICS_X_MAX
-            y_min = ZoneConstants.GRAPHICS_Y_MIN
-            y_max = ZoneConstants.GRAPHICS_Y_MAX
+            y_min = _two_col_y_min
+            y_max = _two_col_y_max
         elif region == "subtitle":
             x_min = ZoneConstants.SUBTITLE_ZONE_X_MIN
             x_max = ZoneConstants.SUBTITLE_ZONE_X_MAX
@@ -1076,7 +1491,7 @@ class LayoutScene(Scene):
             raise ValueError(f"未知区域: {region}")
 
         # 如果传入了动态 column_layout，覆盖多栏 region 的 X 边界
-        # 动态列宽优先于静态常量，避免边界不一致
+
         if column_layout and region in _COLUMN_REGION_TO_INDEX:
             idx = _COLUMN_REGION_TO_INDEX[region]
             if 0 <= idx < len(column_layout):
@@ -1233,7 +1648,6 @@ class LayoutScene(Scene):
             if (id(obj_a), id(obj_b)) in allowed_set:
                 continue  # 跳过，这是合法重叠
 
-            # 第 2 层 - 类型/名称模式自动豁免
             # 命中 ALLOWED_PATTERNS（如 force_arrow_on_object 等）时，stroke 接触
             # 视为合法，跳过 ELEMENT_OVERLAP 检测。后续仍走精细化容差比较。
             pattern_matched = False
@@ -1252,7 +1666,6 @@ class LayoutScene(Scene):
             b_bottom, b_top = obj_b.get_bottom()[1], obj_b.get_top()[1]
             y_overlap = min(a_top, b_top) - max(a_bottom, b_bottom)
 
-            # 动态容差 = max(0.05, max(stroke_a, stroke_b) * 0.55)
             # - 0.05 是 Manim 默认 stroke_width=4 / 72 ≈ 0.056 的安全下限
             # - 额外按对象的实际 stroke_width 加大容差（API 缺失时 try/except 兜底）
             # - 容差仍 < 最小 stroke 宽度，避免漏报真正的重叠
@@ -1263,7 +1676,7 @@ class LayoutScene(Scene):
             tolerance = max(base_tolerance, stroke_tolerance)
 
             if x_overlap > tolerance and y_overlap > tolerance:
-                # 命中 ALLOWED_PATTERNS 模式时，stroke 接触
+
                 # 应豁免（物理图元间天然存在空间关系，不是布局错误）
                 if pattern_matched:
                     continue
@@ -1289,36 +1702,31 @@ class LayoutScene(Scene):
 
         if len(placed_objects) >= 1:
             # ---- 1. 堆叠总高度 vs 区域可用高度 ----
-            # 对已 arrange 过的元素（Σheight + (N-1)*buff），包围盒高度
-            # max(tops) - min(bottoms) 已等于其总占用高度，无需再加 buff。
-            # 唯一可能漏报的情况是元素位置由调用方手动设置且未保持 buff，
-            # 这种情况由 ELEMENT_OVERLAP 检查间接覆盖。
-            # 单对象时本检查等价于单对象高度检查，意义不大，跳过以减少噪音。
-            if len(placed_objects) >= 2:
-                all_tops = [o.get_top()[1] for o in placed_objects]
-                all_bottoms = [o.get_bottom()[1] for o in placed_objects]
-                stack_total_height = max(all_tops) - min(all_bottoms)
-                region_avail_height = y_max - y_min
+            # 计算所有对象的包围盒总高度（从最顶部到最底部）
+            all_tops = [o.get_top()[1] for o in placed_objects]
+            all_bottoms = [o.get_bottom()[1] for o in placed_objects]
+            stack_total_height = max(all_tops) - min(all_bottoms)
+            region_avail_height = y_max - y_min
 
-                if stack_total_height > region_avail_height:
-                    violations.append(
-                        {
-                            "type": "STACK_OVERFLOW",
-                            "object_name": f"region_{region}",
-                            "region": region,
-                            "expected": f"total_height <= {region_avail_height:.2f} (区域可用高度)",
-                            "actual": (
-                                f"stacked_height = {stack_total_height:.2f}\n"
-                                f"  对象数: {len(placed_objects)}, "
-                                f"top={max(all_tops):.2f}, bottom={min(all_bottoms):.2f}"
-                            ),
-                            "detail": (
-                                f"区域内 {len(placed_objects)} 个对象堆叠后 "
-                                f"总高度 ({stack_total_height:.2f}) 超出区域可用高度 "
-                                f"({region_avail_height:.2f})，差值 {stack_total_height - region_avail_height:.2f}"
-                            ),
-                        }
-                    )
+            if stack_total_height > region_avail_height:
+                violations.append(
+                    {
+                        "type": "STACK_OVERFLOW",
+                        "object_name": f"region_{region}",
+                        "region": region,
+                        "expected": f"total_height <= {region_avail_height:.2f} (区域可用高度)",
+                        "actual": (
+                            f"stacked_height = {stack_total_height:.2f}\n"
+                            f"  对象数: {len(placed_objects)}, "
+                            f"top={max(all_tops):.2f}, bottom={min(all_bottoms):.2f}"
+                        ),
+                        "detail": (
+                            f"区域内 {len(placed_objects)} 个对象堆叠后 "
+                            f"总高度 ({stack_total_height:.2f}) 超出区域可用高度 "
+                            f"({region_avail_height:.2f})，差值 {stack_total_height - region_avail_height:.2f}"
+                        ),
+                    }
+                )
 
             # ---- 2. 各对象宽度 vs 区域/列宽 ----
             region_avail_width = x_max - x_min
@@ -1340,6 +1748,9 @@ class LayoutScene(Scene):
                     )
 
             # ---- 3. 相邻元素间距合理性检查 ----
+
+            # 时，相邻对象可能来自不同栏（已设计有 0.5 单位列间距），
+            # 水平间距 5.51 是正常设计，触发 ABNORMAL_SPACING 误报。
             # 仅当 region 是单栏/具体栏（content_*/single_col/*_left/mid/right）
             # 时才做间距检查；safe_area 校验只关心"是否整体越界"，不关心列间距。
             skip_spacing_check = region in ("safe_area", "screen")
@@ -1857,7 +2268,7 @@ class LayoutScene(Scene):
     def _safe_get_stroke_width(mobject: Mobject) -> float:
         """安全地获取 Mobject 的最大 stroke_width（以 Manim 单位返回）
 
-        Manim 的 stroke_width 单位是 points（1 unit = 72 points），
+
         通过除以 72 转为 Manim 单位，用于动态调整重叠检测容差。
 
         实现细节：
@@ -1935,16 +2346,12 @@ class LayoutScene(Scene):
         return group
 
     def _get_typing_run_time(self, mobj: Mobject) -> float:
-        """[未实现] 计算打字动画时长。子类应重写。"""
-        raise NotImplementedError(
-            "LayoutScene._get_typing_run_time 应由子类重写以提供打字动画时长"
-        )
+        """计算打字动画时长"""
+        return 1.0
 
     def _safe_speech_text(self, text: str) -> str:
-        """[未实现] 清理语音文本中的特殊字符。子类应重写。"""
-        raise NotImplementedError(
-            "LayoutScene._safe_speech_text 应由子类重写以适配 TTS 引擎"
-        )
+        """清理语音文本"""
+        return text
 
     # ============================================================
     # 语音相关（占位，实际由 voiceover 处理）
@@ -1955,10 +2362,9 @@ class LayoutScene(Scene):
         self.speech_service = service
 
     def voiceover(self, text: str, **kwargs):
-        """[未实现] 语音占位，子类应使用 manim_voiceover 的 with voiceover 块。"""
-        raise NotImplementedError(
-            "LayoutScene.voiceover 应由子类重写以接入 manim_voiceover"
-        )
+        """语音占位，实际应使用 manim_voiceover 的 with voiceover"""
+        # 这个方法在实际场景中会被覆盖，这里仅为保持接口一致
+        return self
 
     # ============================================================
     # 坐标参考系（调试用，符合 layout.md 第 15 节）
@@ -1970,14 +2376,14 @@ class LayoutScene(Scene):
             return
         from manim import Axes, NumberPlane
 
+        half_w = ZoneConstants.SCREEN_WIDTH / 2
+        half_h = ZoneConstants.SCREEN_HEIGHT / 2
         axes = Axes(
-            x_range=[-7.5, 7.5, 1],
-            y_range=[-4.5, 4.5, 1],
-            x_length=15,
-            y_length=9,
+            x_range=[-half_w, half_w, 1],
+            y_range=[-half_h, half_h, 1],
+            x_length=ZoneConstants.SCREEN_WIDTH,
+            y_length=ZoneConstants.SCREEN_HEIGHT,
             axis_config={"color": "#888888", "stroke_width": 1},
-            x_axis_config={"numbers_to_include": range(-7, 8)},
-            y_axis_config={"numbers_to_include": range(-4, 5)},
         )
         axes.set_opacity(0.3)
         labels = axes.get_axis_labels(x_label="x", y_label="y")

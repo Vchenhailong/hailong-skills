@@ -99,42 +99,23 @@ AI 在输出最终代码前必须逐项自检：
 
 > 本节对应「验收门禁」第三道。必须通过 `validate_layout()` 毫秒级程序化检测，不可依赖肉眼渲染判断。
 
-**执行方式**：
-
-在场景代码的 `construct()` 方法末尾（或单独的验证脚本中）调用：
-
-```python
-from scripts.layout.scene_base import LayoutScene
-from scripts.layout.constants import ZoneConstants as ZC
-
-# 获取场景中所有 mobject（排除背景/辅助元素）
-all_mobs = [m for m in self.mobjects if m.width > 0.1]
-
-# 调用程序化布局校验（9 类违规检测）
-violations = self.validate_layout(
-    all_mobs,
-    region=ZC.ZONE_CONTENT,
-    overlap_pairs=[],  # 显式白名单（如有）
-    allowed_overlap_patterns=ZC.ALLOWED_PATTERNS,  # 语义相关性白名单
-)
-# 通过标准：violations == []（零违规）
-```
+**执行方式**：在场景代码的 `construct()` 方法末尾调用 `self.validate_layout()`，传入场景中所有 mobject 和区域常量。通过标准为返回空列表。
 
 **检测范围**（9 类违规）：
 
-- `REGION_OVERFLOW`：对象超出区域左右边界
-- `REGION_OUTSIDE`：对象在区域外侧
-- `REGION_INTRUSION`：非字幕对象侵入字幕区
-- `ELEMENT_OVERLAP`：元素两两重叠且无语义相关
-- `STACK_OVERFLOW`：多元素堆叠总高度超出区域
-- `WIDTH_EXCEEDS`：单个元素宽度超出列宽
-- `ABNORMAL_SPACING`：相邻元素间距过密或过稀
-- `OVER_DENSE` / `TOO_SPARSE`：区域填充率异常
-- `CENTER_OFFSET`：区域内容重心严重偏移
+| 违规类型                | 说明                     |
+| ----------------------- | ------------------------ |
+| REGION_OVERFLOW         | 对象超出区域左右边界     |
+| REGION_OUTSIDE          | 对象在区域外侧           |
+| REGION_INTRUSION        | 非字幕对象侵入字幕区     |
+| ELEMENT_OVERLAP         | 元素两两重叠且无语义相关 |
+| STACK_OVERFLOW          | 多元素堆叠总高度超出区域 |
+| WIDTH_EXCEEDS           | 单个元素宽度超出列宽     |
+| ABNORMAL_SPACING        | 相邻元素间距过密或过稀   |
+| OVER_DENSE / TOO_SPARSE | 区域填充率异常           |
+| CENTER_OFFSET           | 区域内容重心严重偏移     |
 
-**重叠白名单机制**（语义相关性唯一基准）：
-
-使用 `allowed_overlap_patterns=ZC.ALLOWED_PATTERNS` 自动推断以下 13 种语义相关的合法重叠，无需手动配置：
+**重叠白名单机制**（语义相关性唯一基准）：使用 `allowed_overlap_patterns=ZC.ALLOWED_PATTERNS` 自动推断以下 13 种语义相关的合法重叠，无需手动配置：
 
 - 物理类（4种）：力箭头↔物体、导线↔元件、场线↔物体、物体↔液体
 - 数学/几何类（8种）：顶点↔图形、辅助线↔主图形、角弧↔顶点、标签↔图形、⊥∥符号↔线段、尺寸标注↔线段、切线↔曲线
@@ -246,7 +227,7 @@ violations = self.validate_layout(
 ### 电路图元（IEC 60617 / GB/T 4728）
 
 - [ ] 元件符号标准：电池（S00001）/ 电阻（S00139）/ 电容（S00145）/ 开关（S00061）
-- [ ] 导线 T 型连接处有 `Dot` 圆点，L 型连接处无圆点
+- [ ] 导线 T 型连接处有圆点，L 型连接处无圆点
 - [ ] 回路完整（无断路/短路/孤岛）
 - [ ] ⊙/⊗ 标注垂直纸面方向（电流/磁感线方向）
 - [ ] 电流表/电压表已正确接入电路（串联/并联）
@@ -268,14 +249,8 @@ violations = self.validate_layout(
 
 #### C-D1：导线 T 型连接处无节点圆点
 
-```python
-# ❌ DON'T：三条导线交汇但未画圆点，视觉上无法区分 T 型与 L 型连接
-# 导致回路拓扑错误
-
-# ✅ DO：使用 create_junction_dot() 标注
-junction = create_junction_dot(center=[0, 1, 0])
-parts.add(junction)
-```
+- **禁止**：三条导线交汇但未画圆点，视觉上无法区分 T 型与 L 型连接
+- **必须**：使用 `scripts/physics_graphics.py` 中的 `create_junction_dot()` 工厂函数标注
 
 **画面炸成**：学生无法判断导线是否真正连接，电路逻辑混乱
 
@@ -283,14 +258,8 @@ parts.add(junction)
 
 #### C-D2：导线斜线转弯或斜向连接
 
-```python
-# ❌ DON'T：导线同时存在 X 和 Y 方向偏移
-bad_wire = Line(start=[0, 0, 0], end=[1, 1, 0])  # 斜线！
-
-# ✅ DO：导线必须横平竖直
-good_wire = create_wire(start=[0, 0, 0], end=[1, 0, 0])
-good_wire2 = create_wire(start=[1, 0, 0], end=[1, 1, 0])
-```
+- **禁止**：导线同时存在 X 和 Y 方向偏移（斜线）
+- **必须**：导线必须横平竖直，使用工厂函数创建水平/垂直线段
 
 **画面炸成**：不符合 IEC 标准，视觉混乱
 
@@ -298,16 +267,8 @@ good_wire2 = create_wire(start=[1, 0, 0], end=[1, 1, 0])
 
 #### C-D3：元件缺少 connection_points 属性
 
-```python
-# ❌ DON'T：手动创建的元件未添加 connection_points
-bad_resistor = Rectangle()  # 无连接点定义
-
-# ✅ DO：始终使用工厂函数创建元件
-good_resistor = create_resistor(
-    start=[0, 0, 0], end=[1, 0, 0], label=r"R_1"
-)
-# 内部自动设置 connection_points = {"start": ..., "end": ...}
-```
+- **禁止**：手动创建的元件未添加 connection_points
+- **必须**：始终使用 `scripts/physics_graphics.py` 中的工厂函数创建元件（create_resistor / create_battery 等），自动包含 connection_points
 
 **画面炸成**：无法自动连接，导线端点需要手动计算，容易出错
 
@@ -315,16 +276,8 @@ good_resistor = create_resistor(
 
 #### C-D4：回路未闭合或存在悬空端点
 
-```python
-# ❌ DON'T：导线终点未连接任何元件，形成悬空
-bad_circuit = VGroup(
-    battery,
-    Line(battery.connection_points["end"], [2, 0, 0])  # 悬空端点！
-)
-
-# ✅ DO：确保所有导线都形成闭合回路
-good_circuit = build_series_circuit([...])  # 自动闭合
-```
+- **禁止**：导线终点未连接任何元件，形成悬空
+- **必须**：使用 `build_series_circuit()` 等工厂函数确保所有导线形成闭合回路
 
 **画面炸成**：电路断路，电流无法流通
 
@@ -332,16 +285,8 @@ good_circuit = build_series_circuit([...])  # 自动闭合
 
 #### C-D5：电源正负极标识缺失
 
-```python
-# ❌ DON'T：电池符号缺少 "+" / "-" 标记
-bad_battery = VGroup(LongLine, ShortLine)  # 无极性标识
-
-# ✅ DO：使用 create_battery() 工厂函数，自动添加极性标记
-good_battery = create_battery(
-    start=[0, 0, 0], end=[0, 1, 0], voltage=r"\mathcal{E}=9\text{V}"
-)
-# 内部自动包含 plus_sign (+) 和 minus_sign (-)
-```
+- **禁止**：电池符号缺少 "+" / "-" 标记
+- **必须**：使用 `create_battery()` 工厂函数，自动包含极性标记
 
 **画面炸成**：无法区分正负极，违反 IEC 60617-02 强制要求
 
@@ -381,17 +326,11 @@ good_battery = create_battery(
 ## 字幕负向约束（Don't）
 
 > **用途**：当字幕代码写成这样 → 画面炸成这样。Agent 必须避免以下任意一条。
-> 对应 SKILL.md 中的 [负向约束速查索引](../SKILL.md#负向约束速查索引dont-quick-reference)。
 
 ### S-D1：单条字幕过长（单行超过20字）
 
-```python
-# ❌ DON'T：单行字数过长
-bad_text = "这是一个非常非常长的单行字幕内容，超过了20个字符的限制"
-
-# ✅ DO：单行 ≤ 20 字（由 subtitle_scroller.py 自动拆分和滚动）
-# 只需确保单行字数不超过限制，滚动由 scroller 自动处理
-```
+- **禁止**：单行字数过长
+- **必须**：单行 ≤ 20 字，由 `subtitle_scroller.py` 自动拆分和滚动处理
 
 **画面炸成**：单行超出字幕区宽度，文字被裁剪或挤压
 
@@ -399,19 +338,8 @@ bad_text = "这是一个非常非常长的单行字幕内容，超过了20个字
 
 ### S-D2：字幕与语音时长不同步
 
-```python
-# ❌ DON'T：tts_text 为空或 duration 留默认值
-step = {
-    "tts_text": "",      # 空，跳过了 TTS 映射
-    "duration": 6.0,     # 固定默认值，未按实际语速计算
-}
-
-# ✅ DO：每步必须填写 tts_text，duration 估算 ≥ 实际朗读时长
-step = {
-    "tts_text": "导数的几何意义是函数图像上某一点的切线斜率",
-    "duration": 5.5,     # 估算实际朗读约 5 秒
-}
-```
+- **禁止**：tts_text 为空或 duration 留默认值
+- **必须**：每步必须填写 tts_text，duration 估算 ≥ 实际朗读时长（约 4 字/秒）
 
 **画面炸成**：字幕在语音结束前消失，或语音结束后字幕仍停留
 
@@ -419,16 +347,8 @@ step = {
 
 ### S-D3：强调条宽度未对齐底衬
 
-```python
-# ❌ DON'T：强调条宽度固定为 0.1（过窄，贴边）
-bad_accent = Rectangle(width=0.1, height=bg.get_height())
-
-# ✅ DO：强调条宽度等于底衬宽度，居中放置
-good_accent = Rectangle(
-    width=bg.get_width(),
-    height=bg.get_height()
-).move_to(bg.get_center())
-```
+- **禁止**：强调条宽度固定为 0.1（过窄，贴边）
+- **必须**：强调条宽度等于底衬宽度，居中放置
 
 **画面炸成**：强调条几乎不可见，失去强调效果
 
@@ -436,13 +356,8 @@ good_accent = Rectangle(
 
 ### S-D4：字幕区 Y 超出边界
 
-```python
-# ❌ DON'T：字幕放在正区域，与主内容重叠
-bad_subtitle_y = 2.0  # 超出字幕区 Y ∈ [-3.85, -2.8] 范围
-
-# ✅ DO：字幕固定在字幕区
-good_subtitle_y = -3.3  # 在字幕区范围内
-```
+- **禁止**：字幕放在正区域，与主内容重叠
+- **必须**：字幕固定在字幕区（Y ∈ [-3.85, -2.8]）
 
 **画面炸成**：字幕与公式重叠，遮挡主内容
 
@@ -450,14 +365,8 @@ good_subtitle_y = -3.3  # 在字幕区范围内
 
 ### S-D5：单行字幕字符超过 20
 
-```python
-# ❌ DON'T：单行字符过长，远端无法快速阅读
-bad_line = "当导数大于零时，函数在该区间单调递增"
-# 共 19 个字符 → 18pt 字号时宽度超出安全区
-
-# ✅ DO：split_utterance 限制每行 ≤ 20 字符
-good_lines = split_utterance(bad_line, max_chars_per_line=20)
-```
+- **禁止**：单行字符过长，远端无法快速阅读
+- **必须**：使用 `split_utterance()` 限制每行 ≤ 20 字符
 
 **画面炸成**：字幕溢出屏幕边缘
 

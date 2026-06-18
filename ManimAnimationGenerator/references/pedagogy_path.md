@@ -180,46 +180,9 @@ self.wait(0.2)
 3. 图形应与当前教学阶段匹配，避免无关图形干扰
 4. 图形应配合 visual_action 实现动画效果（高亮、变换、移动）
 
-### 12.3 graphics 字段使用示例
+### 12.3 graphics 字段说明
 
-矩阵乘法的直观体验阶段（阶段②）：
-{
-"type": "linear_algebra",
-"params": {
-"vectors": [
-{"name": "i", "coords": [1, 0], "color": "RED"},
-{"name": "j", "coords": [0, 1], "color": "GREEN"}
-],
-"transform": {
-"matrix": [[2, 0], [0, 1]],
-"show_animation": true
-}
-}
-}
-
-矩阵定义阶段（阶段③）：
-{
-"type": "polygon",
-"params": {
-"shape": "rectangle",
-"width": 4,
-"height": 3,
-"center": [0, 0],
-"color": "#66DDFF",
-"fill_opacity": 0.2
-}
-}
-
-应用阶段（阶段⑥）：
-{
-"type": "physics",
-"params": {
-"object": "robot_arm",
-"position": [0, 0],
-"angles": [0, 45, 90],
-"show_animation": true
-}
-}
+graphics.type 和 params 字段的取值规范详见 `references/json_schema.md` 中关于 `graphics` 字段的定义。
 
 ### 12.4 图形绘制验收清单
 

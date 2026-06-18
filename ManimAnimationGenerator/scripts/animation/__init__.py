@@ -5,5 +5,11 @@
 """
 
 from scripts.animation.subtitle_scroller import SubtitleScroller
+from scripts.animation.typewriter import Typewriter, typewriter_in, typewriter_in_group
 
-__all__ = ["SubtitleScroller"]
+__all__ = [
+    "SubtitleScroller",
+    "Typewriter",
+    "typewriter_in",
+    "typewriter_in_group",
+]

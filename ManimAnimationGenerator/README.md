@@ -10,11 +10,11 @@
 本技能可通过任意AI模型接收用户的课程知识目标，自动分析内容结构，生成人类可读的教学内容 Markdown 与对应的课程结构 JSON，由AI驱动 `manim` 渲染引擎输出知识点动画视频。
 
 主旨目标3个：
-A. 屏蔽编程工作 
-B. 解决manim排版炸的问题 
-C. 快速、稳定的通过内容驱动AI生成manim视频
+A. 屏蔽绝大多数manim编程工作
+B. 力求解决manim的核心短板问题————自动完成排版布局、内容缩放、内容动画处理、字幕处理和时长控制
+C. 快速、稳定的通过内容驱动AI生成manim视频，帮助用户聚焦在纯内容上（当然，图形绘制的人机协同调试是难以避免的）
 
-决策影响：技能本身已经做了验证与测试，但 LLM 自身能力可能导致鲁棒性降低、对齐度偏离。建议选择第一梯队的模型。
+决策影响：技能本身已经做了验证与测试，但 LLM 自身能力可能导致鲁棒性降低，对齐度偏离。建议选择第一梯队的模型。
 
 **核心产物**：
 
@@ -27,65 +27,70 @@ C. 快速、稳定的通过内容驱动AI生成manim视频
 
 ## 目录结构
 
-```
-manimanimationgenerator/
-├── SKILL.md                          # 主技能文档（AI 读取的唯一入口）
-├── README.md                          # 本文件（包结构总览）
-│
-├── references/                        # 参考规范（15 个专项文档）
-│   ├── animation.md                   # 动画原理与命名规范
-│   ├── builtin_knowledge.md           # 内置知识库内容
-│   ├── json_schema.md                 # 课程结构 JSON 校验规范（含 duration 计算约束）
-│   ├── layout.md                      # 区域布局规范（content/graphics/subtitle）
-│   ├── layout_concept.html            # 布局概念可视化说明
-│   ├── math_latex.md                  # 数学 LaTeX 规范（MathTex vs Tex）
-│   ├── pedagogy_path.md               # 教学路径设计（识记→理解→应用）
-│   ├── physics.md                     # 物理绘图图元规范（§15 含 IEC60617/GB-T4728；§15.1.1 受力点选择规范）
-│   ├── project_structure.md           # 工程目录结构规范
-│   ├── quality_acceptance.md          # 验收标准与质量门禁
-│   ├── rendering.md                   # 渲染配置（1080p60/720p30/4k）
-│   ├── textbook_sources.md            # 教材知识源覆盖清单
-│   ├── tts_guide.md                   # TTS 发音映射（LaTeX+Unicode → 中文）
-│   ├── verification_checklist.md     # 验证清单（5道门禁）
-│   └── workflow.md                    # 用户-AI 协作工作流
-│
-├── scripts/                           # 可执行脚本与模块
-│   ├── animation/
-│   │   └── subtitle_scroller.py       # 字幕滚动管理器（预计算滚动系统 + max_duration 比例缩放）
-│   │
-│   ├── layout/
-│   │   ├── constants.py               # ZoneConstants 布局常量定义
-│   │   ├── engine.py                  # 布局引擎入口
-│   │   ├── scene_base.py              # LayoutScene 基类（含 validate_layout / _precheck_mobject / place_two_column / place_three_column）
-│   │   ├── optimizer.py               # 布局优化器（3轮降级链：scale_font → wrap_content[完整实现] → split_atom）
-│   │   └── zones/                     # 三区域容器
-│   │       ├── base.py                # ZoneBase 基类
-│   │       ├── main_content_zone.py   # 主内容区（文字+公式）
-│   │       ├── graphics_zone.py       # 图形区（几何+物理图元）
-│   │       └── subtitle_zone.py      # 字幕区（底衬，无装饰条）
-│   │
-│   ├── validation/
-│   │   └── course_schema_validator.py # JSON 结构校验（含 duration 匹配 ±3s 容差）
-│   │
-│   ├── physics_graphics.py            # 物理图元工厂函数（create_force_arrow / create_car / create_inclined_plane 等）
-│   ├── tex_tools.py                   # LaTeX 处理工具（TTS/Unicode/校验/下标）
-│   ├── subtitle_splitter.py          # 字幕拆分（max_chars 断行）
-│   ├── split_atom.py                  # 公式原子拆分（操作数/操作符解析）
-│   ├── visual_actions.py              # 可视化动作定义（fade/slide/highlight...）
-│   ├── validate_layout.py             # 布局校验入口脚本
-│   └── validate_course_contents.py    # 课程内容校验脚本
-│
-├── templates/                         # 代码模板与配置
-│   ├── course_template.json           # 课程结构 JSON 模板
-│   ├── layout_test_template.json      # 布局测试模板
-│   └── manim.cfg                      # Manim 全局配置
-│
-└── examples/                          # 示例
-    ├── matrix_course_example.json      # 课程 JSON 示例
-    ├── matrix_scene.py                # 对应 Manim 场景代码
-    ├── run_example.sh                  # 运行命令示例
-    └── run_example_specfication.txt   # 示例规格说明
-```
+### 主目录
+
+- SKILL.md — 主技能文档（AI 读取的唯一入口）
+- README.md — 本文件（包结构总览）
+
+### references/ — 参考规范（15 个专项文档）
+
+| 文件                      | 内容                                           |
+| ------------------------- | ---------------------------------------------- |
+| animation.md              | 动画原理与命名规范                             |
+| builtin_knowledge.md      | 内置知识库内容                                 |
+| json_schema.md            | 课程结构 JSON 校验规范（含 duration 计算约束） |
+| layout.md                 | 区域布局规范（content/graphics/subtitle）      |
+| subtitle_scroller.md      | 字幕的展示和动画规范                           |
+| layout_concept.html       | 布局概念可视化说明                             |
+| math_latex.md             | 数学 LaTeX 规范（MathTex vs Tex）              |
+| pedagogy_path.md          | 教学路径设计（识记→理解→应用）                 |
+| physics.md                | 物理绘图图元规范（含受力点选择规范）           |
+| project_structure.md      | 工程目录结构规范                               |
+| quality_acceptance.md     | 验收标准与质量门禁                             |
+| rendering.md              | 渲染配置（1080p60/720p30/4k）                  |
+| textbook_sources.md       | 教材知识源覆盖清单                             |
+| tts_guide.md              | TTS 发音映射（LaTeX+Unicode → 中文）           |
+| verification_checklist.md | 验证清单（5道门禁）                            |
+| workflow.md               | 用户-AI 协作工作流                             |
+
+### scripts/ — 可执行脚本与模块
+
+| 文件/目录                             | 内容                                                                                                |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| animation/subtitle_scroller.py        | 字幕滚动管理器（预计算滚动系统 + max_duration 比例缩放）                                            |
+| layout/constants.py                   | ZoneConstants 布局常量定义                                                                          |
+| layout/engine.py                      | 布局引擎入口                                                                                        |
+| layout/scene_base.py                  | LayoutScene 基类（含 validate_layout / \_precheck_mobject / place_two_column / place_three_column） |
+| layout/optimizer.py                   | 布局优化器（3轮降级链：scale_font → wrap_content → split_atom）                                     |
+| layout/zones/base.py                  | ZoneBase 基类                                                                                       |
+| layout/zones/main_content_zone.py     | 主内容区（文字+公式）                                                                               |
+| layout/zones/graphics_zone.py         | 图形区（几何+物理图元）                                                                             |
+| layout/zones/subtitle_zone.py         | 字幕区（底衬，无装饰条）                                                                            |
+| validation/course_schema_validator.py | JSON 结构校验（含 duration 匹配 ±3s 容差）                                                          |
+| physics_graphics.py                   | 物理图元工厂函数（create_force_arrow / create_car / create_inclined_plane 等）                      |
+| tex_tools.py                          | LaTeX 处理工具（TTS/Unicode/校验/下标）                                                             |
+| subtitle_splitter.py                  | 字幕拆分（max_chars 断行）                                                                          |
+| split_atom.py                         | 公式原子拆分（操作数/操作符解析）                                                                   |
+| visual_actions.py                     | 可视化动作定义（fade/slide/highlight 等）                                                           |
+| validate_layout.py                    | 布局校验入口脚本                                                                                    |
+| validate_course_contents.py           | 课程内容校验脚本                                                                                    |
+
+### templates/ — 代码模板与配置
+
+| 文件                      | 内容               |
+| ------------------------- | ------------------ |
+| course_template.json      | 课程结构 JSON 模板 |
+| layout_test_template.json | 布局测试模板       |
+| manim.cfg                 | Manim 全局配置     |
+
+### examples/ — 示例
+
+| 文件                          | 内容                    |
+| ----------------------------- | ----------------------- |
+| matrix_course_example.json    | 课程 JSON 示例          |
+| matrix_scene.py               | 对应 Manim 场景代码示例 |
+| run_example.sh                | 运行命令示例            |
+| run_example_specification.txt | 示例规格说明            |
 
 ## 核心文件速查
 
@@ -100,7 +105,7 @@ manimanimationgenerator/
 | 换行策略（Text CJK 分行 / MathTex 断点拆分） | `scripts/layout/optimizer.py` → `_apply_wrap()` / `_wrap_text_object()` / `_wrap_math_object()` |
 | 布局校验（9类违规+语义豁免）                 | `scripts/layout/scene_base.py` → `validate_layout()`（含13种模式自动推断语义相关性）            |
 | 重叠白名单（13种模式，语义相关性推断）       | `scripts/layout/scene_base.py` → `ALLOWED_PATTERNS`（零配置自动豁免）                           |
-| 物理图元工厂                                 | `scripts/physics_graphics.py` → `create_force_arrow()` / `create_car()` / ...                   |
+| 物理图元工厂                                 | `scripts/physics_graphics.py` → `create_force_arrow()` / `create_car()` / 等                    |
 | 受力点规范                                   | `references/physics.md` → §15.1.1（G/N/f/F/T 作用点速查表 + 错误对照）                          |
 | 字幕滚动（预计算+比例缩放）                  | `scripts/animation/subtitle_scroller.py`                                                        |
 | 布局常量（区域边界）                         | `scripts/layout/constants.py` → `ZoneConstants`                                                 |

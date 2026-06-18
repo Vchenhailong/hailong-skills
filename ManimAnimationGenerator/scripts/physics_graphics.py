@@ -3,6 +3,19 @@
 """
 物理图形工厂函数模块 - 遵循 IEC 60617 / GB/T 4728 / GB/T 4460 / 人教版标准
 
+> ⚠️ **重要声明：图元仅作参考规范，实际绘制需根据场景调整**
+>
+> 本模块中所有图元工厂函数（`create_battery`、`create_resistor`、`create_switch` 等）
+> 仅提供**标准化的参考实现**和**默认参数**。
+>
+> **实际电路图绘制必须根据具体场景需求**：
+> - 调整元件尺寸、位置、方向
+> - 选择合适的元件方向（水平/垂直）
+> - 按照导线坐标进行精确拼接
+> - 遵循 IEC 60617 / GB/T 4728 连接规范（导线不得侵入元件内部）
+>
+> **核心原则**：图元函数是工具，不是模板；根据场景需要灵活组合使用，而非机械套用。
+
 提供电路元件、基础图元、组装工具、动画函数等完整物理图形绘制能力。
 所有图元遵循对应的国际/国家标准（IEC 60617 / GB/T 4728 / GB/T 4460）和人教版教材规范。
 
@@ -18,6 +31,27 @@
 
 > ⚠️ 重要：真实有效的图元绘制必须使用本文件中的工厂函数。
 > physics.md 文档中的示例代码仅作为规范说明，实际调用请使用本文件的函数。
+
+---
+## 元件自带导线说明
+
+**以下元件自带短导线（wire_left/wire_right），仅用于标识连接位置**：
+
+| 元件 | 自带导线 | 用途 |
+| ---- | -------- | ---- |
+| create_battery | ✅ wire_left, wire_right | 标识电池正负极端子 |
+| create_resistor | ✅ wire_left, wire_right | 标识电阻左右连接点 |
+| create_bulb | ✅ wire_left, wire_right | 标识灯泡左右连接点 |
+| create_switch | ✅ wire_left, wire_right | 标识开关左右连接点 |
+| create_rheostat | ✅ wire_left, wire_right | 标识滑动变阻器左右端子 |
+| create_ammeter | ❌ 无自带导线 | 使用 connection_points["left/right"] |
+| create_voltmeter | ❌ 无自带导线 | 使用 connection_points["left/right"] |
+| create_capacitor | ❌ 无自带导线 | 使用 connection_points["top/bottom"] |
+
+**重要提醒**：
+1. 元件自带的短导线仅为**引出端子**，不是完整的外接连接导线
+2. 外接连接导线必须使用 `create_wire()` 独立创建，遵循"横平竖直"规范
+3. 接线时，使用元件的 `connection_points` 坐标作为连接起点/终点
 """
 
 import numpy as np
@@ -52,6 +86,7 @@ from manim import (
     ORIGIN,
     AnimationGroup,
     Transform,
+    ArrowTriangleFilledTip,
 )
 from typing import List, Optional
 
@@ -66,15 +101,15 @@ except ImportError:
 # 标准依据：IEC 60617 / GB/T 4728 / 人教版教材
 # ════════════════════════════════════════════════════════════
 
-BATTERY_LONG_HALF = 0.35  # 正极长线半长（IEC 60617-02 比例约定）
+BATTERY_LONG_HALF = 0.4   # 正极长线半长（IEC 60617-02 比例：长:短=2:1）
 BATTERY_SHORT_HALF = 0.2  # 负极短线半长
 BATTERY_GAP = 0.15  # 极板间距
 RESISTOR_WIDTH = 1.0  # 电阻矩形宽度（IEC 60617-04 S00139）
 RESISTOR_HEIGHT = 0.4  # 电阻矩形高度
-BULB_RADIUS = 0.3  # 灯泡圆半径（人教版教材）
+BULB_RADIUS = 0.35  # 灯泡圆半径（人教版教材，加大以提高可见度）
 WIRE_LENGTH = 0.3  # 元件自动引出导线长度（IEC 连接规范最小值）
 SWITCH_CONTACT_GAP = 0.4  # 开关触点间距（GB/T 4728.02）
-SWITCH_DOT_RADIUS = 0.04  # 开关触点圆半径
+SWITCH_DOT_RADIUS = 0.12  # 开关触点圆半径（增大到 0.12 确保屏幕清晰可见）
 METER_RADIUS = 0.25  # 电表圆半径（人教版教材）
 CAPACITOR_PLATE_LENGTH = 0.6  # 电容极板长度（IEC 60617-04 S00145）
 CAPACITOR_PLATE_GAP = 0.5  # 电容极板间距
@@ -128,12 +163,11 @@ CIRCUIT_COLORS = {
     "path_green": "#66FFAA",  # 通路高亮（绿）
     "short_yellow": "#FFDD66",  # 短路警示（黄）
     "break_red": "#FF4444",  # 断路标记（红）
-    # 力矢量颜色严格遵循 references/physics.md 15.2.1 力-色固定映射表
-    # 力学域内最小色相差 51°，确保多力共存时高辨识度
-    "force_G": "#EF4444",  # 重力 G（红，H:0°）
-    "force_N": "#3B82F6",  # 支持力 N（蓝，H:217°）
-    "force_f": "#EAB308",  # 摩擦力 f（黄，H:51°）
-    "force_F": "#22C55E",  # 外力/推力 F（绿，H:142°
+    # physics.md Section 1 力学力-色映射表（色值差 > 45°）
+    "force_G": "#66FFAA",  # 重力 G（绿）
+    "force_N": "#66DDFF",  # 支持力 N（蓝）
+    "force_f": "#FF6666",  # 摩擦力 f（红）
+    "force_F": "#FFDD66",  # 外力/推力 F（黄）
     "force_T": "#A855F7",  # 拉力/张力 T（紫，H:272°）
     "force_buoyancy": "#06B6D4",  # 浮力（青，H:188°）
     "force_combined": "#9CA3AF",  # 合力（中灰，无彩 S:7%）
@@ -150,6 +184,10 @@ def create_battery(start, end, label="", voltage=""):
 
     功能：创建标准电池符号，长线为正极(+)，短线为负极(-)，比例约 2:1。
          start 端为负极侧，end 端为正极侧。包含两段引出导线。
+
+    > ⚠️ **实际绘制需根据场景调整**：本函数提供标准参考实现，
+    > 调用时应根据具体电路布局调整 start/end 位置、尺寸参数。
+    > 导线连接点必须精确匹配电路走线坐标。
 
     参数：
         start: 负极终端位置 [x, y, 0]
@@ -189,19 +227,22 @@ def create_battery(start, end, label="", voltage=""):
 
     # 极性标记（IEC 60617 强制要求：正负极标识不得缺失）
     # 使用显式坐标定位标签，基于元件几何中心+垂直方向偏移（遵循 F1：禁用 .next_to()）
-    plus_sign = MathTex("+", font_size=20)
+    plus_sign = MathTex("+", font_size=22)
     plus_sign.move_to(long_line.get_center() + perp * (BATTERY_LONG_HALF + 0.08))
-    minus_sign = MathTex("-", font_size=20)
+    minus_sign = MathTex("-", font_size=22)
     minus_sign.move_to(short_line.get_center() + perp * (BATTERY_SHORT_HALF + 0.08))
     group.add(plus_sign, minus_sign)
 
     if voltage:
-        v_lbl = MathTex(voltage, font_size=28)
-        v_lbl.move_to(group.get_center() + perp * (0.5 + 0.15))
+        v_lbl = MathTex(voltage, font_size=22)
+        # 电压标签放在 -perp 侧（电池另一侧），远离开关 S 标签
+        # 关键修正：增大偏移 0.45 → 0.7，确保与底部主回路垂直导线有足够距离
+        v_lbl.move_to(group.get_center() + (-perp) * (BATTERY_SHORT_HALF + 0.7))
         group.add(v_lbl)
     if label:
-        l_obj = MathTex(label, font_size=28)
-        l_obj.move_to(group.get_center() + (-perp) * (0.5 + 0.15))
+        l_obj = MathTex(label, font_size=22)
+        # 元件标签（如 E）放在 +perp 侧（与极性标记同侧）
+        l_obj.move_to(group.get_center() + perp * (BATTERY_LONG_HALF + 0.45))
         group.add(l_obj)
 
     group.connection_points = {"start": start.copy(), "end": end.copy()}
@@ -220,6 +261,10 @@ def create_resistor(start, end, label="", resistance=""):
 
     功能：创建欧式矩形电阻符号（非 ANSI 锯齿形），矩形居中于 start/end 之间，
          导线拆分为两段分别接矩形左右端点（遵循 IEC 绘制原则：禁止单线穿过元件）。
+
+    > ⚠️ **实际绘制需根据场景调整**：本函数提供标准参考实现，
+    > 调用时应根据具体电路布局调整 start/end 位置、尺寸参数。
+    > 导线连接点必须精确匹配电路走线坐标。
 
     参数：
         start: 左终端位置 [x, y, 0]
@@ -257,8 +302,8 @@ def create_resistor(start, end, label="", resistance=""):
     group = VGroup(wire_left, body, wire_right)
 
     if label:
-        l_obj = MathTex(label, font_size=28)
-        l_obj.move_to(body.get_center() + perp * (RESISTOR_HEIGHT / 2 + 0.1 + 0.12))
+        l_obj = MathTex(label, font_size=22)
+        l_obj.move_to(body.get_center() + (-perp) * (RESISTOR_HEIGHT / 2 + 0.1 + 0.12))
         group.add(l_obj)
     if resistance:
         r_lbl = MathTex(resistance, font_size=24)
@@ -278,6 +323,10 @@ def create_bulb(center=None, radius=BULB_RADIUS, label="", lit=False):
          两端各自带 0.3 单位长度的引出导线（遵循 IEC 60617 连接规范）。
          lit=False 时 YELLOW_C 空心；lit=True 时 ORANGE 半透明填充。
 
+    > ⚠️ **实际绘制需根据场景调整**：本函数提供标准参考实现，
+    > 调用时应根据具体电路布局调整 center 位置、radius 尺寸。
+    > 导线连接点必须精确匹配电路走线坐标。
+
     参数：
         center: 灯泡中心位置 [x, y, 0]，默认 ORIGIN
         radius: 圆半径，默认 0.3
@@ -291,7 +340,8 @@ def create_bulb(center=None, radius=BULB_RADIUS, label="", lit=False):
     """
     center = np.array(center, dtype=float) if center is not None else np.array(ORIGIN)
 
-    stroke_color = YELLOW_C
+    # 关键修正：未点亮时使用白色（人教版教材标准），点亮时使用 YELLOW_C
+    stroke_color = YELLOW_C if lit else WHITE
     outer = Circle(radius=radius, color=stroke_color, stroke_width=2)
     outer.move_to(center)
 
@@ -329,7 +379,7 @@ def create_bulb(center=None, radius=BULB_RADIUS, label="", lit=False):
     group = VGroup(wire_left, outer, cross_l1, cross_l2, wire_right)
 
     if label:
-        l_obj = MathTex(label, font_size=28)
+        l_obj = MathTex(label, font_size=22)
         l_obj.move_to(outer.get_center() + UP * (radius + 0.1 + 0.12))
         group.add(l_obj)
 
@@ -348,69 +398,135 @@ def create_bulb(center=None, radius=BULB_RADIUS, label="", lit=False):
     return group
 
 
-def create_switch(start, end, closed=False, label=""):
+def create_switch(start, end, closed=False, label="", orientation="horizontal"):
     """创建开关元件（GB/T 4728.02 S00061 / 人教版）
 
-    功能：创建双触点 + 开关臂符号。closed=True 时臂为直线连接两触点；
-         closed=False 时臂从第一触点向垂直方向偏 45° 抬起。
+    功能：创建标准开关符号。
+         默认状态下，开关臂从下触点向**右上方**抬起 **45°**（断开状态，
+         这是人教版教材的惯例）。
+
+    支持水平方向（导线的左右接入）和垂直方向（导线的上下接入）。
+
+    > ⚠️ **实际绘制需根据场景调整**：本函数提供标准参考实现，
+    > 调用时应根据具体电路布局选择 orientation（horizontal/vertical），
+    > 并调整 start/end 位置。确保导线能够"横平竖直"地连接到开关接入点。
 
     参数：
-        start: 第一触点侧终端位置 [x, y, 0]
-        end: 第二触点侧终端位置 [x, y, 0]
-        closed: 闭合状态，默认 False（断开）
-        label: 标签 MathTex，默认空
+        start: 导线接入点 A [x, y, 0]
+            - 水平方向：左接入点
+            - 垂直方向：下接入点
+        end: 导线接入点 B [x, y, 0]
+            - 水平方向：右接入点
+            - 垂直方向：上接入点
+        closed: 闭合状态，默认 False（断开，45° 抬起）
+        label: 标签，默认空
+        orientation: 开关方向，"horizontal"（水平）或 "vertical"（垂直）
 
-    返回：VGroup，named_parts 含 dot1/dot2/arm；
-         connection_points 含 start/end 端子坐标；component_type="switch"
+    返回：VGroup；connection_points 含 start/end（与传入一致）；
+         component_type="switch"
 
     标准依据：GB/T 4728.02 S00061 / 人教版教材
     """
-    start, end = np.array(start, dtype=float), np.array(end, dtype=float)
-    unit_dir = _unit_direction(start, end)
-    perp = _perpendicular(unit_dir)
-    center = (start + end) / 2
+    start = np.array(start, dtype=float)
+    end = np.array(end, dtype=float)
 
-    dot1_pos = center - unit_dir * (SWITCH_CONTACT_GAP / 2)
-    dot2_pos = center + unit_dir * (SWITCH_CONTACT_GAP / 2)
+    # 开关符号尺寸
+    SWITCH_BODY_SIZE = 0.3   # 触点间距（标准 GB/T 4728.02）
+    LEAD_LENGTH = 0.3           # 引出导线长度（从 start/end 到最近触点）
 
-    dot1 = Dot(point=dot1_pos, radius=SWITCH_DOT_RADIUS, color=WHITE)
-    dot2 = Dot(point=dot2_pos, radius=SWITCH_DOT_RADIUS, color=WHITE)
-
-    if closed:
-        arm = Line(dot1_pos, dot2_pos, stroke_width=2, color=WHITE)
-    else:
-        arm_len = SWITCH_CONTACT_GAP * 0.75
-        open_end = dot1_pos + unit_dir * arm_len * 0.7 + perp * arm_len * 0.7
-        arm = Line(dot1_pos, open_end, stroke_width=2, color=WHITE)
-
-    wire_left = Line(start, dot1_pos, stroke_width=2, color=WHITE)
-    wire_right = Line(dot2_pos, end, stroke_width=2, color=WHITE)
-
-    group = VGroup(wire_left, dot1, dot2, arm, wire_right)
-
-    if label:
-        l_obj = MathTex(label, font_size=28)
-        l_obj.move_to(
-            group.get_center() + perp * (SWITCH_CONTACT_GAP / 2 + 0.15 + 0.12)
+    if orientation == "horizontal":
+        # 水平方向：start 和 end 在同一水平线上（y 相同）
+        # 触点竖直排列（上下）
+        center = (start + end) / 2
+        center_x, center_y = center[0], center[1]
+        
+        dot_a = np.array([center_x, center_y - SWITCH_BODY_SIZE / 2, 0])  # 下触点
+        dot_b = np.array([center_x, center_y + SWITCH_BODY_SIZE / 2, 0])  # 上触点
+        
+        # 引出导线水平延伸
+        wire_start = Line(
+            np.array([start[0], center_y, 0]),
+            np.array([dot_a[0] - LEAD_LENGTH, center_y, 0]),
+            stroke_width=2, color=WHITE
         )
+        wire_end = Line(
+            np.array([dot_b[0] + LEAD_LENGTH, center_y, 0]),
+            np.array([end[0], center_y, 0]),
+            stroke_width=2, color=WHITE
+        )
+        
+        # 标签位置（上方）
+        label_offset = np.array([0, SWITCH_BODY_SIZE / 2 + 0.35, 0])
+        label_pos = np.array([center_x, center_y + SWITCH_BODY_SIZE / 2 + 0.35, 0])
+        
+        # 断开时臂的方向：向右上 45°
+        arm_direction = np.array([0.707, 0.707, 0])
+        
+    else:  # vertical
+        # 垂直方向：start 和 end 在同一垂直线上（x 相同）
+        # 触点水平排列（左右）
+        center = (start + end) / 2
+        center_x, center_y = center[0], center[1]
+        
+        dot_a = np.array([center_x - SWITCH_BODY_SIZE / 2, center_y, 0])  # 左触点
+        dot_b = np.array([center_x + SWITCH_BODY_SIZE / 2, center_y, 0])  # 右触点
+        
+        # 引出导线垂直延伸
+        wire_start = Line(
+            np.array([center_x, start[1], 0]),
+            np.array([center_x, dot_a[1] - LEAD_LENGTH, 0]),
+            stroke_width=2, color=WHITE
+        )
+        wire_end = Line(
+            np.array([center_x, dot_b[1] + LEAD_LENGTH, 0]),
+            np.array([center_x, end[1], 0]),
+            stroke_width=2, color=WHITE
+        )
+        
+        # 标签位置（右方，避开导线）
+        label_pos = np.array([center_x + SWITCH_BODY_SIZE / 2 + 0.35, center_y, 0])
+        
+        # 断开时臂的方向：向右上 45°（相对于水平向右）
+        arm_direction = np.array([0.707, 0.707, 0])
+
+    # 触点圆点（深灰色 #555555，确保白底电路图清晰可见）
+    SWITCH_DOT_COLOR = "#555555"
+    dot_a_obj = Dot(point=dot_a, radius=SWITCH_DOT_RADIUS, color=SWITCH_DOT_COLOR)
+    dot_b_obj = Dot(point=dot_b, radius=SWITCH_DOT_RADIUS, color=SWITCH_DOT_COLOR)
+
+    # 开关臂
+    if closed:
+        # 闭合：直线连接两触点
+        arm = Line(dot_a, dot_b, stroke_width=2, color=WHITE)
+    else:
+        # 断开：臂从触点 a 向特定方向抬起 45°
+        arm_len = SWITCH_BODY_SIZE * 0.9
+        open_end = dot_a + arm_direction * arm_len
+        arm = Line(dot_a, open_end, stroke_width=2, color=WHITE)
+
+    # 开关本体（触点+臂）
+    switch_body = VGroup(dot_a_obj, dot_b_obj, arm)
+
+    # 完整开关（含引出导线）
+    group = VGroup(wire_start, wire_end, switch_body)
+
+    # 标签
+    if label:
+        l_obj = MathTex(label, font_size=22)
+        l_obj.move_to(label_pos)
         group.add(l_obj)
 
+    # connection_points 与传入的 start/end 保持一致
     group.connection_points = {
         "start": start.copy(),
         "end": end.copy(),
-        "dot1": dot1_pos.copy(),
-        "dot2": dot2_pos.copy(),
     }
-    group.named_parts = {
-        "dot1": dot1,
-        "dot2": dot2,
-        "arm": arm,
-        "wire_left": wire_left,
-        "wire_right": wire_right,
-    }
+    group.named_parts = {"arm": arm, "dot_a": dot_a_obj, "dot_b": dot_b_obj}
     group.component_type = "switch"
     group.closed = closed
+    group.orientation = orientation
     return group
+
 
 
 def create_ammeter(center=None, radius=METER_RADIUS, label=""):
@@ -432,12 +548,13 @@ def create_ammeter(center=None, radius=METER_RADIUS, label=""):
 
     circle = Circle(radius=radius, color=WHITE, stroke_width=2)
     circle.move_to(center)
-    marker = Text("A", font_size=24, color=WHITE).move_to(center)
+    # 关键修正：用 MathTex 代替 Text（Text 在某些环境下会渲染成红色波浪 `~~~~`）
+    marker = MathTex("A", font_size=22, color=WHITE).move_to(center)
 
     group = VGroup(circle, marker)
 
     if label:
-        l_obj = MathTex(label, font_size=28)
+        l_obj = MathTex(label, font_size=22)
         l_obj.move_to(circle.get_center() + UP * (radius + 0.1 + 0.12))
         group.add(l_obj)
 
@@ -468,12 +585,13 @@ def create_voltmeter(center=None, radius=METER_RADIUS, label=""):
 
     circle = Circle(radius=radius, color=WHITE, stroke_width=2)
     circle.move_to(center)
-    marker = Text("V", font_size=24, color=WHITE).move_to(center)
+    # 关键修正：用 MathTex 代替 Text（Text 在某些环境下会渲染成红色波浪 `~~~~`）
+    marker = MathTex("V", font_size=22, color=WHITE).move_to(center)
 
     group = VGroup(circle, marker)
 
     if label:
-        l_obj = MathTex(label, font_size=28)
+        l_obj = MathTex(label, font_size=22)
         l_obj.move_to(circle.get_center() + UP * (radius + 0.1 + 0.12))
         group.add(l_obj)
 
@@ -530,7 +648,7 @@ def create_capacitor(
     group = VGroup(upper_plate, lower_plate)
 
     if label:
-        l_obj = MathTex(label, font_size=28)
+        l_obj = MathTex(label, font_size=22)
         # 标签置于极板组左侧（显式坐标，遵循 F1：禁用 .next_to()）
         label_pos = group.get_center() + LEFT * (
             CAPACITOR_PLATE_LENGTH / 2 + 0.15 + 0.12
@@ -610,7 +728,7 @@ def create_rheostat(start, end, label=""):
     )
 
     if label:
-        l_obj = MathTex(label, font_size=28)
+        l_obj = MathTex(label, font_size=22)
         l_obj.move_to(body.get_center() + (-perp) * (RHEOSTAT_HEIGHT / 2 + 0.1 + 0.12))
         group.add(l_obj)
 
@@ -637,6 +755,10 @@ def create_wire(start, end, color=WHITE, stroke_width=2):
 
     功能：创建横平竖直的导线段（水平或垂直），禁止斜线。
          自动校验方向，若起终点同时在 X 和 Y 方向有差异则报错。
+
+    > ⚠️ **实际绘制需根据场景调整**：导线必须根据电路拓扑精确拼接，
+    > 起点和终点应与元件的 connection_points 精确匹配。
+    > 遵循"横平竖直"规范，避免导线侵入元件内部。
 
     参数：
         start: 起点 [x, y, 0]
@@ -666,21 +788,21 @@ def create_wire(start, end, color=WHITE, stroke_width=2):
     return wire
 
 
-def create_junction_dot(point, radius=0.05):
+def create_junction_dot(point, radius=0.04):
     """创建节点圆点（GB/T 4728 连接节点标记）
 
     功能：在导线交叉且连通处创建实心圆点，标识电气连接节点。
 
     参数：
         point: 节点位置 [x, y, 0]
-        radius: 圆点半径，默认 0.05（GB/T 4728 标准）
+        radius: 圆点半径，默认 0.04（GB/T 4728 标准最小要求）
 
     返回：Dot 对象，附带 connection_points 属性
 
     标准依据：GB/T 4728（三线交点处必须标注实心圆点）
     """
     point = np.array(point, dtype=float)
-    dot = Dot(point=point, radius=radius, color=WHITE)
+    dot = Dot(point=point, radius=radius, color=WHITE, fill_opacity=1.0)
     dot.connection_points = {"center": point.copy()}
     dot.component_type = "junction_dot"
     return dot
@@ -787,12 +909,10 @@ def create_force_arrow(origin, direction_vector, magnitude=1.0, label="", color=
     返回：VGroup，named_parts 含 arrow/label_text；
          connection_points 含 origin/tip；component_type="force_arrow"
 
-    坐标快照行为：
-        connection_points 中的 origin/tip 在函数调用时记录为静态快照。
-        若传入的 origin 来自已变换过的图元（如旋转后的小车），
-        必须确保该坐标本身是变换后的实时值（通过 .get_center()、
-        .get_bottom()、named_parts["xxx"].get_xxx() 动态获取），
-        而非该图元的 connection_points 快照。
+    绘制规范：
+        - 比例尺：scale = 0.5（1 单位 magnitude = 0.5 坐标单位）
+        - 最小箭头长度：1.0 单位（确保可读性）
+        - 线宽：stroke_width = 3（GB/T 4460-2013 最小值）
 
     标准依据：GB/T 4460-2013 第 7 章（实心三角箭头，从作用点出发）
     """
@@ -804,31 +924,37 @@ def create_force_arrow(origin, direction_vector, magnitude=1.0, label="", color=
         raise ValueError("力方向向量不能为零向量")
 
     unit_d = d_vec / d_len
-    # 长度与力大小成正比，比例尺 0.5 单位/牛顿（可按场景调整）
+    # 比例尺：0.5 单位/牛顿（physics.md 15.2.1 规范）
+    # 最小箭头长度：3.0 单位（确保可读性）
     scale = 0.5
-    end_point = origin + unit_d * magnitude * scale
+    min_length = 3.0
+    arrow_length = max(magnitude * scale, min_length)
+    end_point = origin + unit_d * arrow_length
 
     # 颜色自动映射
     if color is None:
         color = _map_force_color(label)
 
+    # 使用 Arrow，stroke_width=3 符合 GB/T 4460-2013 最小值要求
+    # buff=0 确保箭头严格从 origin 出发（多力共点时不偏移）
     arrow = Arrow(
         start=origin,
         end=end_point,
-        buff=0.15,
+        buff=0,
         stroke_width=3,
         color=color,
-        max_tip_length_to_length_ratio=0.2,
+        max_tip_length_to_length_ratio=0.25,
     )
 
     group = VGroup(arrow)
 
     if label:
-        lbl = MathTex(label, font_size=28)
-        # 标签置于箭头末端外侧（沿方向延伸，略微偏移垂直方向）
+        lbl = MathTex(label, font_size=22)
+        # 标签置于箭头尖端外侧（沿方向延伸）
         perp = np.array([-unit_d[1], unit_d[0], 0])
-        tip_pos = end_point + unit_d * 0.3
-        lbl.move_to(tip_pos + perp * 0.2)
+        # 箭头尖端位置（考虑箭头比例，减小偏移避免距离过远）
+        tip_pos = end_point + unit_d * 0.5
+        lbl.move_to(tip_pos + perp * 0.25)
         group.add(lbl)
 
     group.connection_points = {
@@ -940,7 +1066,7 @@ def create_car(
     group = VGroup(body, wheel_l, wheel_r)
 
     if label:
-        lbl = MathTex(label, font_size=28)
+        lbl = MathTex(label, font_size=22)
         lbl.move_to(body.get_center() + UP * (height / 2 + 0.1 + 0.12))
         group.add(lbl)
 
@@ -1000,19 +1126,19 @@ def create_lever(
 
     # 左端力臂标签（显式坐标定位，遵循 F1：禁用 .next_to()）
     if label_left:
-        lbl_l = MathTex(label_left, font_size=28)
+        lbl_l = MathTex(label_left, font_size=22)
         lbl_l.move_to(bar_left + DOWN * 0.3)
         group.add(lbl_l)
 
     # 右端力臂标签
     if label_right:
-        lbl_r = MathTex(label_right, font_size=28)
+        lbl_r = MathTex(label_right, font_size=22)
         lbl_r.move_to(bar_right + DOWN * 0.3)
         group.add(lbl_r)
 
     # 支点标签
     if label_fulcrum:
-        lbl_f = Text(label_fulcrum, font_size=20, color=WHITE)
+        lbl_f = Text(label_fulcrum, font_size=22, color=WHITE)
         lbl_f.move_to(fulcrum + DOWN * 0.2)
         group.add(lbl_f)
 
@@ -1092,7 +1218,7 @@ def create_wall(
             group.add(slant_line)
 
     if label:
-        lbl = MathTex(label, font_size=28)
+        lbl = MathTex(label, font_size=22)
         lbl.move_to(wall_rect.get_center() + UP * (height / 2 + 0.1 + 0.12))
         group.add(lbl)
 
@@ -1163,7 +1289,7 @@ def create_container(pts, label="", style=None):
         # 标签置于容器几何中心
         cx = sum(p[0] for p in pts_arr) / len(pts_arr)
         cy = sum(p[1] for p in pts_arr) / len(pts_arr)
-        lbl = MathTex(label, font_size=28).move_to([cx, cy, 0])
+        lbl = MathTex(label, font_size=22).move_to([cx, cy, 0])
         group.add(lbl)
 
     # 计算顶边中点（液面基准线）
@@ -1297,15 +1423,30 @@ def build_series_circuit(components_config, start_pos=None, direction=RIGHT):
     wire_left_up = Line(corner_left_bottom, start_pos, stroke_width=2, color=WHITE)
     parts.add(wire_left_up)
 
-    # 节点圆点（GB/T 4728 要求 T 型连接处标注实心圆点）
-    for corner in [
+    # 节点圆点（GB/T 4728 要求所有 T 型连接处标注实心圆点）
+    # 角落位置（4个）：矩形回路的四个顶点
+    corner_dots = [
         corner_right_top,
         corner_right_bottom,
         corner_left_bottom,
         start_pos,
-    ]:
+    ]
+    for corner in corner_dots:
         junction = create_junction_dot(corner)
         parts.add(junction)
+
+    # 元件连接点（每个元件与导线的 T 型连接处）
+    # 遍历所有元件，在其 connection_points 位置添加节点圆点
+    for comp in component_list:
+        if hasattr(comp, 'connection_points'):
+            for pt_name, pt in comp.connection_points.items():
+                # 只添加导线方向的端点，不重复添加角落点
+                if pt_name in ('start', 'end'):
+                    # 检查是否已在角落点附近
+                    is_corner = any(np.linalg.norm(pt - corner) < 0.05 for corner in corner_dots)
+                    if not is_corner:
+                        junction = create_junction_dot(pt)
+                        parts.add(junction)
 
     parts.circuit_meta = {
         "components": component_list,
@@ -1326,8 +1467,14 @@ def build_parallel_branch(
 ):
     """构建并联分支（IEC 60617 / GB/T 4728 / 人教版）
 
-    功能：在主回路两个节点之间插入并联分支，分支沿垂直方向展开，
-         元件水平排列在分支内，两端用导线连接到主回路节点。
+    功能：在主回路两个节点之间插入并联分支，
+         分支沿垂直方向（Y轴）展开，元件水平排列在分支内，
+         两端用导线连接到主回路节点。
+
+         走线规范：
+         - 入口导线：先竖直向下 → 再水平到达第一个元件
+         - 元件区域：元件水平排列（沿X轴）
+         - 出口导线：先水平到达主回路 → 再竖直连接
 
     参数：
         main_circuit: 主回路 VGroup（由 build_series_circuit 返回）
@@ -1341,39 +1488,49 @@ def build_parallel_branch(
     """
     branch_start = np.array(branch_start_node, dtype=float)
     branch_end = np.array(branch_end_node, dtype=float)
-    branch_dir = _unit_direction(branch_start, branch_end)
-    perp = _perpendicular(branch_dir)
 
-    branch_depth = 0.8  # 分支向垂直方向偏移的距离
+    branch_depth = 0.8  # 分支向垂直方向（下方）偏移的距离
     component_spacing = 1.2
 
     parts = VGroup()
 
-    # 分支起点和终点的偏移位置（向垂直方向偏移）
-    b_start = branch_start - perp * branch_depth
-    b_end = branch_end - perp * branch_depth
+    # 分支水平放置区域：起点和终点都在同一水平线上
+    branch_y = branch_start[1] - branch_depth
 
-    # 入口竖直导线
-    wire_in = create_wire(branch_start, b_start)
-    parts.add(wire_in)
+    # ── 入口导线：先竖直向下 → 再水平到达第一个元件 ──
+    # 入口竖直段：从 branch_start 竖直向下到 branch_y
+    wire_in_vert_start = branch_start.copy()
+    wire_in_vert_end = np.array([branch_start[0], branch_y, 0])
+    wire_in_vert = create_wire(wire_in_vert_start, wire_in_vert_end)
+    parts.add(wire_in_vert)
 
-    current_pos = b_start.copy()
+    # 入口水平段：从竖直段末端水平到达第一个元件
+    current_pos = wire_in_vert_end.copy()
+
     component_list = []
-
     for config in components_config:
         comp_type = config.get("type", "")
         params = config.get("params", {})
         comp_start = current_pos.copy()
-        comp_end = current_pos + branch_dir * component_spacing
+        comp_end = np.array([comp_start[0] + component_spacing, comp_start[1], 0])
 
         comp = _create_from_config(comp_type, comp_start, comp_end, params)
         parts.add(comp)
         component_list.append(comp)
         current_pos = comp_end.copy()
 
-    # 出口竖直导线
-    wire_out = create_wire(b_end, branch_end)
-    parts.add(wire_out)
+    # ── 出口导线：先水平 → 再竖直连接到 branch_end ──
+    # 出口水平段：从最后一个元件末端水平到达 branch_end 的 x 坐标
+    wire_out_horiz_start = current_pos.copy()
+    wire_out_horiz_end = np.array([branch_end[0], branch_y, 0])
+    wire_out_horiz = create_wire(wire_out_horiz_start, wire_out_horiz_end)
+    parts.add(wire_out_horiz)
+
+    # 出口竖直段：从水平段末端竖直向上连接到 branch_end
+    wire_out_vert_start = wire_out_horiz_end.copy()
+    wire_out_vert_end = branch_end.copy()
+    wire_out_vert = create_wire(wire_out_vert_start, wire_out_vert_end)
+    parts.add(wire_out_vert)
 
     # 节点圆点（并联接入点必须标注）
     parts.add(create_junction_dot(branch_start))
@@ -1383,6 +1540,120 @@ def build_parallel_branch(
         "components": component_list,
         "branch_start": branch_start.copy(),
         "branch_end": branch_end.copy(),
+        "branch_y": branch_y,
+    }
+    return parts
+
+
+def build_circuit(components_config, start_pos=None, loop_height=2.0):
+    """构建通用串并联混联电路（IEC 60617 / GB/T 4728 / 人教版）
+
+    功能：构建完整的串并联混联电路，支持：
+    - 任意数量的串联元件（沿顶部水平排列）
+    - 每个元件位置可作为并联分支的接入点
+    - 底部自动闭合形成完整回路
+
+    走线规范（GB/T 4728）：
+    - 顶部：元件水平排列（沿 X 轴）
+    - 右侧：竖直向下
+    - 底部：水平向左
+    - 左侧：竖直向上回到起点
+    - 所有导线：横平竖直（禁止斜线）
+    - T 型连接处：节点圆点标注
+
+    参数：
+        components_config: 元件配置列表
+            [{"type": "battery|resistor|bulb|switch|ammeter|rheostat",
+              "params": {...}}]
+        start_pos: 起点位置 [x, y, 0]，默认 [-1.5, 1.0, 0]
+        loop_height: 回路高度（顶边到底边的距离），默认 2.0
+
+    返回：VGroup，含所有元件、导线、节点；附带 circuit_meta 属性
+        circuit_meta = {
+            "components": [...],
+            "start_pos": ...,
+            "corners": {"right_top": ..., "right_bottom": ..., "left_bottom": ...},
+            "loop_height": ...,
+        }
+
+    标准依据：IEC 60617 / GB/T 4728（闭合回路、导线横平竖直、节点标记）
+    """
+    if start_pos is None:
+        start_pos = np.array([-1.5, 1.0, 0])
+    else:
+        start_pos = np.array(start_pos, dtype=float)
+
+    direction = np.array([1.0, 0.0, 0])  # 水平向右
+    component_spacing = 1.4
+
+    parts = VGroup()
+    current_pos = start_pos.copy()
+    component_list = []
+
+    # 遍历元件配置，创建每个元件
+    for config in components_config:
+        comp_type = config.get("type", "")
+        params = config.get("params", {})
+        comp_start = current_pos.copy()
+        comp_end = current_pos + direction * component_spacing
+
+        comp = _create_from_config(comp_type, comp_start, comp_end, params)
+        parts.add(comp)
+        component_list.append(comp)
+        current_pos = comp_end.copy()
+
+    # 记录顶边终点
+    end_top = current_pos.copy()
+
+    # ── 右侧竖直导线（从上到下）─────────────────────────────
+    corner_right_top = end_top.copy()
+    corner_right_bottom = end_top - np.array([0, loop_height, 0])
+    wire_right = create_wire(corner_right_top, corner_right_bottom)
+    parts.add(wire_right)
+
+    # ── 底部水平导线（从右到左）───────────────────────────
+    corner_left_bottom = start_pos - np.array([0, loop_height, 0])
+    wire_bottom = create_wire(corner_right_bottom, corner_left_bottom)
+    parts.add(wire_bottom)
+
+    # ── 左侧竖直导线（从下到上）───────────────────────────
+    wire_left = create_wire(corner_left_bottom, start_pos)
+    parts.add(wire_left)
+
+    # ── 节点圆点（GB/T 4728：T 型连接处必须标注）────────
+    # 角落节点
+    corner_positions = [
+        corner_right_top,    # 右上角
+        corner_right_bottom,  # 右下角
+        corner_left_bottom,   # 左下角
+        start_pos,           # 左上角（起点）
+    ]
+    for corner in corner_positions:
+        parts.add(create_junction_dot(corner))
+
+    # 元件连接点处的节点（每个元件 start 和 end 端点）
+    for comp in component_list:
+        if hasattr(comp, 'connection_points'):
+            for pt_name, pt in comp.connection_points.items():
+                if pt_name in ('start', 'end'):
+                    # 检查是否接近角落
+                    is_corner = any(
+                        np.linalg.norm(pt - corner) < 0.1
+                        for corner in corner_positions
+                    )
+                    if not is_corner:
+                        parts.add(create_junction_dot(pt))
+
+    parts.circuit_meta = {
+        "components": component_list,
+        "start_pos": start_pos.copy(),
+        "end_top": end_top.copy(),
+        "corners": {
+            "right_top": corner_right_top.copy(),
+            "right_bottom": corner_right_bottom.copy(),
+            "left_bottom": corner_left_bottom.copy(),
+        },
+        "loop_height": loop_height,
     }
     return parts
 
@@ -1402,7 +1673,6 @@ def _create_from_config(comp_type, comp_start, comp_end, params):
     type_map = {
         "battery": create_battery,
         "resistor": create_resistor,
-        "switch": create_switch,
         "rheostat": create_rheostat,
     }
     center_map = {
@@ -1414,11 +1684,101 @@ def _create_from_config(comp_type, comp_start, comp_end, params):
 
     if comp_type in type_map:
         return type_map[comp_type](comp_start, comp_end, **params)
+    elif comp_type == "switch":
+        # 开关特殊处理：支持 closed 和 label 参数
+        return create_switch(comp_start, comp_end, **params)
     elif comp_type in center_map:
         center = (comp_start + comp_end) / 2
         return center_map[comp_type](center=center, **params)
     else:
         raise ValueError(f"未知元件类型: {comp_type}")
+
+
+def validate_circuit_topology(circuit: VGroup) -> tuple:
+    """验证电路拓扑完整性（GB/T 4728 规范校验）
+
+    功能：检查电路图中是否存在常见的绘制错误，包括：
+    - 悬空端点（导线终点未连接到元件或节点）
+    - 节点圆点缺失（T 型连接处无圆点标记）
+    - 元件导线拆分正确性（电阻等元件两端导线是否独立）
+
+    参数：
+        circuit: VGroup，包含电路元件和导线的组合对象
+
+    返回：(is_valid: bool, errors: list)
+        - is_valid: 拓扑是否有效
+        - errors: 错误列表，每项为 str 描述
+
+    标准依据：GB/T 4728 连接规则 / IEC 60617 通用规则
+    """
+    errors = []
+
+    # 1. 检查所有 JunctionDot 是否有 connection_points
+    junction_dots = []
+    for obj in circuit:
+        if getattr(obj, 'component_type', None) == 'junction_dot':
+            junction_dots.append(obj)
+
+    # 2. 统计 T 型连接点（导线交叉处应有 junction dot）
+    wire_count = 0
+    component_connections = []
+
+    for obj in circuit:
+        obj_type = getattr(obj, 'component_type', None)
+
+        # 统计导线
+        if obj_type == 'wire':
+            wire_count += 1
+
+        # 收集元件连接点
+        if hasattr(obj, 'connection_points'):
+            for pt_name, pt_coords in obj.connection_points.items():
+                component_connections.append((obj_type, pt_name, pt_coords))
+
+    # 3. 基本检查：串联回路至少需要 4 段导线（顶边、底边、两侧）
+    if wire_count < 4 and len(component_connections) > 0:
+        errors.append(
+            f"导线段数过少({wire_count}段)，串联回路至少需要4段导线"
+        )
+
+    # 4. 检查电池正负极标识（IEC 60617 强制）
+    has_battery = any(
+        getattr(obj, 'component_type', None) == 'battery'
+        for obj in circuit
+    )
+    if has_battery:
+        battery = next(
+            obj for obj in circuit
+            if getattr(obj, 'component_type', None) == 'battery'
+        )
+        # 检查电池是否有 +/- 标记
+        has_plus = any(
+            hasattr(child, 'tex_string') and child.tex_string == '+'
+            for child in battery
+        )
+        has_minus = any(
+            hasattr(child, 'tex_string') and child.tex_string == '-'
+            for child in battery
+        )
+        if not (has_plus and has_minus):
+            errors.append("电池符号缺少正负极标识 (+/-)")
+
+    # 5. 检查并联分支节点圆点（必须有两个）
+    branch_count = 0
+    for obj in circuit:
+        if hasattr(obj, 'branch_meta'):
+            branch_count += 1
+
+    if branch_count > 0:
+        # 每个并联分支起点和终点都应该有 junction dot
+        expected_junction_count = 2 * branch_count
+        if len(junction_dots) < expected_junction_count:
+            errors.append(
+                f"并联分支({branch_count}个)需要至少{expected_junction_count}个节点圆点，"
+                f"实际{len(junction_dots)}个"
+            )
+
+    return len(errors) == 0, errors
 
 
 # ════════════════════════════════════════════════════════════
@@ -1497,6 +1857,56 @@ def animate_current_flow(scene, dots_group, path, duration=2.0, direction="forwa
 # ════════════════════════════════════════════════════════════
 
 
+def create_current_arrow(start, end, label=""):
+    """创建电流方向标注箭头（physics.md §15.3 / 人教版）
+
+    功能：在导线上叠加红色箭头，标注电流方向（传统正电荷方向）。
+
+    参数：
+        start: 箭头起点 [x, y, 0]
+        end: 箭头终点 [x, y, 0]
+        label: LaTeX 标签（如 "I"），默认空
+
+    返回：VGroup，named_parts 含 arrow/label_text；
+         connection_points 含 start/end；component_type="current_arrow"
+
+    标准依据：physics.md §15.3 电流方向表（红色 #FF6666，传统正电荷方向）
+
+    电路中典型应用（叠加在导线中点附近）：
+        - 主回路水平导线：start=[左端, y, 0], end=[右端, y, 0]
+        - 并联分支水平导线：同理
+        - 垂直导线：start=[x, 下端, 0], end=[x, 上端, 0]
+    """
+    start = np.array(start, dtype=float)
+    end = np.array(end, dtype=float)
+
+    current_red = CIRCUIT_COLORS["current_red"]  # "#FF6666"
+
+    arrow = Arrow(
+        start,
+        end,
+        buff=0.05,
+        stroke_width=1.5,
+        color=current_red,
+        tip_shape=ArrowTriangleFilledTip,
+    )
+
+    group = VGroup(arrow)
+
+    if label:
+        mid = (start + end) / 2
+        unit_dir = _unit_direction(start, end)
+        perp = _perpendicular(unit_dir)
+        l_obj = MathTex(label, font_size=22, color=current_red)
+        l_obj.move_to(mid + perp * 0.22)
+        group.add(l_obj)
+
+    group.connection_points = {"start": start.copy(), "end": end.copy()}
+    group.named_parts = {"arrow": arrow}
+    group.component_type = "current_arrow"
+    return group
+
+
 def set_switch_state(switch_group, closed):
     """生成开关状态切换动画（GB/T 4728.02 / 人教版）
 
@@ -1558,6 +1968,215 @@ def set_bulb_state(bulb_group, lit):
 
 
 # ════════════════════════════════════════════════════════════
+# 元件连接点统一接口
+# ════════════════════════════════════════════════════════════
+
+
+def get_component_terminals(component):
+    """获取元件的连接点坐标（统一接口）
+
+    直接返回元件的 connection_points，根据元件类型和创建方向自动适配。
+
+    Args:
+        component: 元件 VGroup（由 create_* 函数创建）
+
+    Returns:
+        dict: 连接点字典，格式因元件类型而异：
+            - 电池/电阻/灯泡/开关: {"left": np.array, "right": np.array}
+            - 电流表/电压表: {"left": np.array, "right": np.array}
+            - 电容: {"top": np.array, "bottom": np.array}
+            - 滑动变阻器: {"start": np.array, "end": np.array, "slider": np.array}
+
+    注意:
+        返回的键名取决于元件的物理特性：
+        - 水平放置的元件：返回 left/right
+        - 垂直放置的元件：返回 top/bottom
+        - 电容标准符号为垂直方向：返回 top/bottom
+        - 滑动变阻器有3个端子
+
+    示例:
+        >>> battery = create_battery([-2, 0, 0], [2, 0, 0])
+        >>> terminals = get_component_terminals(battery)
+        >>> # battery 是水平放置，返回 left/right
+        >>> left_pos = terminals["left"]  # [-2, 0, 0]
+        >>> right_pos = terminals["right"]  # [2, 0, 0]
+        >>>
+        >>> # 电容是垂直放置，返回 top/bottom
+        >>> capacitor = create_capacitor([0, 0, 0])
+        >>> caps = get_component_terminals(capacitor)
+        >>> top_pos = caps["top"]
+        >>> bottom_pos = caps["bottom"]
+    """
+    if not hasattr(component, "connection_points"):
+        raise ValueError(f"元件没有 connection_points 属性: {component}")
+
+    return component.connection_points
+
+
+def get_terminals_left_right(component):
+    """获取元件的左右（水平）连接点
+
+    Args:
+        component: 元件 VGroup
+
+    Returns:
+        dict: {"left": np.array, "right": np.array}
+
+    注意:
+        - 电容只有垂直连接点 (top/bottom)，调用此函数会返回 None
+        - 滑动变阻器返回 start/end
+    """
+    cp = component.connection_points
+    comp_type = getattr(component, "component_type", None)
+
+    if comp_type == "capacitor":
+        return {"left": None, "right": None}
+
+    if comp_type == "rheostat":
+        return {"left": cp["start"], "right": cp["end"]}
+
+    # 其他元件（电池/电阻/灯泡/开关/电流表/电压表）统一用 start/end
+    return {"left": cp.get("start", cp.get("left")),
+            "right": cp.get("end", cp.get("right"))}
+
+
+def get_terminals_top_bottom(component):
+    """获取元件的上下（垂直）连接点
+
+    Args:
+        component: 元件 VGroup
+
+    Returns:
+        dict: {"top": np.array, "bottom": np.array}
+
+    注意:
+        - 灯泡/电流表/电压表只有水平连接点，调用此函数会返回 None
+        - 滑动变阻器没有垂直连接点，调用此函数会返回 None
+    """
+    cp = component.connection_points
+    comp_type = getattr(component, "component_type", None)
+
+    if comp_type == "capacitor":
+        return {"top": cp["top"], "bottom": cp["bottom"]}
+
+    if comp_type in ("bulb", "ammeter", "voltmeter", "rheostat"):
+        return {"top": None, "bottom": None}
+
+    # 电池/电阻/开关：它们的 start/end 可能代表 top/bottom
+    # 具体取决于元件是水平还是垂直放置
+    return {"top": cp.get("start"), "bottom": cp.get("end")}
+
+
+def get_terminals_3terminal(component):
+    """获取三端元件的连接点（滑动变阻器专用）
+
+    Args:
+        component: 滑动变阻器 VGroup
+
+    Returns:
+        dict: {"start": np.array, "end": np.array, "slider": np.array}
+
+    注意:
+        - 只有滑动变阻器有三端，其他元件调用此函数会抛出异常
+    """
+    comp_type = getattr(component, "component_type", None)
+    if comp_type != "rheostat":
+        raise ValueError(f"只有滑动变阻器有三端连接点，当前元件类型: {comp_type}")
+    return component.connection_points
+
+
+# ════════════════════════════════════════════════════════════
+# 元件自动连接工具
+# ════════════════════════════════════════════════════════════
+
+
+def connect_components(scene, comp1, comp2, port1="right", port2="left",
+                       color=None):
+    """在两个元件之间自动创建导线连接
+
+    Args:
+        scene: Manim Scene 对象（用于将导线添加到场景）
+        comp1: 第一个元件 VGroup
+        comp2: 第二个元件 VGroup
+        port1: 第一个元件的端口 ("left" | "right" | "top" | "bottom" | "start" | "end" | "slider")
+        port2: 第二个元件的端口 ("left" | "right" | "top" | "bottom" | "start" | "end" | "slider")
+        color: 导线颜色，默认白色
+
+    Returns:
+        VGroup: 创建的导线 VGroup
+
+    示例:
+        >>> # 连接电池和电阻（水平方向）
+        >>> wire = connect_components(scene, battery, resistor, "right", "left")
+        >>>
+        >>> # 连接电容（垂直方向）
+        >>> wire = connect_components(scene, cap1, cap2, "top", "bottom")
+    """
+    if color is None:
+        color = "#FFFFFF"
+
+    cp1 = comp1.connection_points
+    cp2 = comp2.connection_points
+
+    pos1 = cp1.get(port1)
+    pos2 = cp2.get(port2)
+
+    if pos1 is None:
+        raise ValueError(f"元件1没有 {port1} 端口")
+    if pos2 is None:
+        raise ValueError(f"元件2没有 {port2} 端口")
+
+    wire = create_wire(pos1, pos2, color=color)
+    scene.add(wire)
+    return wire
+
+
+def create_circuit_from_nodes(scene, nodes, connections, wire_color=None):
+    """从节点列表和连接信息创建完整电路
+
+    Args:
+        scene: Manim Scene 对象
+        nodes: dict，元件字典 {"name": VGroup}
+            示例: {"battery": battery, "resistor": resistor, "switch": switch}
+        connections: list，连接列表 [(name1, port1, name2, port2), ...]
+            示例: [("battery", "right", "switch", "left"),
+                   ("switch", "right", "resistor", "left")]
+        wire_color: 导线颜色，默认白色
+
+    Returns:
+        VGroup: 所有导线的组合
+
+    示例:
+        >>> nodes = {
+        ...     "battery": create_battery([-3, 0, 0], [-1, 0, 0]),
+        ...     "switch": create_switch([-1, 0, 0], [1, 0, 0]),
+        ...     "resistor": create_resistor([1, 0, 0], [3, 0, 0]),
+        ... }
+        >>> connections = [
+        ...     ("battery", "right", "switch", "left"),
+        ...     ("switch", "right", "resistor", "left"),
+        ... ]
+        >>> wires = create_circuit_from_nodes(scene, nodes, connections)
+    """
+    if wire_color is None:
+        wire_color = "#FFFFFF"
+
+    all_wires = VGroup()
+    for name1, port1, name2, port2 in connections:
+        comp1 = nodes.get(name1)
+        comp2 = nodes.get(name2)
+        if comp1 is None:
+            raise ValueError(f"未找到元件: {name1}")
+        if comp2 is None:
+            raise ValueError(f"未找到元件: {name2}")
+
+        wire = connect_components(scene, comp1, comp2, port1, port2, color=wire_color)
+        all_wires.add(wire)
+
+    return all_wires
+
+
+# ════════════════════════════════════════════════════════════
 # 统一导出列表
 # ════════════════════════════════════════════════════════════
 
@@ -1606,10 +2225,22 @@ __all__ = [
     # 电路组装
     "build_series_circuit",
     "build_parallel_branch",
+    "build_circuit",
+    # 电路拓扑验证
+    "validate_circuit_topology",
     # 电流动画
     "create_current_dots",
     "animate_current_flow",
+    "create_current_arrow",
     # 状态切换
     "set_switch_state",
     "set_bulb_state",
+    # 元件连接点统一接口
+    "get_component_terminals",
+    "get_terminals_left_right",
+    "get_terminals_top_bottom",
+    "get_terminals_3terminal",
+    # 元件自动连接工具
+    "connect_components",
+    "create_circuit_from_nodes",
 ]

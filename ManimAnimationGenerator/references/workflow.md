@@ -23,7 +23,6 @@
 
 操作步骤：
 
-```
 1. 按七阶段规划叙事流，设计每个原子的具体教学内容（定义、直观解释、反直觉澄清等）。
 2. 为每个原子分配视觉动作类型。
 3. 生成语音文本草案，转义数学符号为自然语言。
@@ -34,13 +33,12 @@
    - 重要公式独立成原子
 5. 用户逐条确认教学草案。
 6. 生成 Markdown 课程文档（人类可读）：
-   - 文件名：主题_course.md
+   - 文件名：主题\_course.md
    - 内容：按教学阶段组织的自然语言描述
    - **必须包含人工制作时长估算**（每个原子/板块标注预估制作时间，单位：分钟）
    - 无技术字段（type、duration、visual_action 等技术程序字段）
    - 便于用户阅读、校对、讨论
 7. 输出独立的 JSON 教学内容文件（机器可读），存放在 courses/ 目录下。
-```
 
 输出物：
 
@@ -49,34 +47,7 @@
 
 验收：用户确认教学草案完整，Markdown 文档可读，JSON 文件格式正确，每个原子满足尺寸约束。
 
-示例 JSON：
-
-```json
-{
-  "topic": "矩阵乘法",
-  "version": "1.0",
-  "source": "同济高等数学 2.1",
-  "prerequisites": ["向量点积", "矩阵基本概念"],
-  "atoms": [
-    {
-      "id": "mat_mul_guess",
-      "type": "counter_intuitive",
-      "content": "错误猜测：按位相乘",
-      "visual_action": "show_wrong_guess",
-      "speech": "有人可能会以为矩阵乘法是相同位置直接相乘，但这是错误的。",
-      "duration": 7.0
-    },
-    {
-      "id": "mat_mul_definition",
-      "type": "definition",
-      "content": "(AB)_{ij} = Σ_k A_{ik} B_{kj}",
-      "visual_action": "highlight_dot_product",
-      "speech": "结果矩阵第 i 行 j 列等于 A 的第 i 行与 B 的第 j 列的点积。",
-      "duration": 8.0
-    }
-  ]
-}
-```
+JSON 结构示例见 `references/json_schema.md`。
 
 ## 阶段三：代码开发
 
@@ -125,26 +96,24 @@
 
 ## 文件与阶段对应关系表
 
-```
-| 文件 | 所属阶段 | 用途 |
-|------|----------|------|
-| pedagogy_path.md | 内容设计 | 教学路径规范 |
-| builtin_knowledge.md | 内容设计 | 知识原子库 |
-| textbook_sources.md | 内容设计 | 教材来源 |
-| tts_guide.md | 教学路径与内容设计 | TTS 语音指南 |
-| json_schema.md | 内容设计 | JSON 教学内容规范 |
-| layout.md | 代码开发 | 布局规范 |
-| animation.md | 代码开发 | 动画规范 |
-| rendering.md | 代码开发 | 渲染规范 |
-| project_structure.md | 代码开发 | 用户项目构建结构 |
-| layout_base.py | 代码开发 | 布局底座 |
-| tex_tools.py | 代码开发 | LaTeX 工具 |
-| validate_course_contents.py | 代码开发 | JSON 校验 |
-| split_atom.py | 代码开发 | 原子拆分 |
-| verification_checklist.md | 代码开发 | 开发自检清单 |
-| quality_acceptance.md | 成片验收 | 成片验收清单 |
-| physics.md 等学科文件 | 内容设计/代码开发 | 学科专项规范 |
-```
+| 文件                         | 所属阶段           | 用途                         |
+| ---------------------------- | ------------------ | ---------------------------- |
+| pedagogy_path.md             | 内容设计           | 教学路径规范                 |
+| builtin_knowledge.md         | 内容设计           | 知识原子库                   |
+| textbook_sources.md          | 内容设计           | 教材来源                     |
+| tts_guide.md                 | 教学路径与内容设计 | TTS 语音指南                 |
+| json_schema.md               | 内容设计           | JSON 教学内容规范            |
+| layout.md                    | 代码开发           | 布局规范                     |
+| animation.md                 | 代码开发           | 动画规范                     |
+| rendering.md                 | 代码开发           | 渲染规范                     |
+| project_structure.md         | 代码开发           | 用户项目构建结构             |
+| scripts/layout/scene_base.py | 代码开发           | 布局底座（LayoutScene 基类） |
+| tex_tools.py                 | 代码开发           | LaTeX 工具                   |
+| validate_course_contents.py  | 代码开发           | JSON 校验                    |
+| split_atom.py                | 代码开发           | 原子拆分                     |
+| verification_checklist.md    | 代码开发           | 开发自检清单                 |
+| quality_acceptance.md        | 成片验收           | 成片验收清单                 |
+| physics.md 等学科文件        | 内容设计/代码开发  | 学科专项规范                 |
 
 ## Markdown 课程文档示例
 
@@ -260,61 +229,32 @@ AB != BA
 |
 知识拆解（pedagogy_path.md + builtin_knowledge.md）
 |
-┌─────────────────────────────────────┐
-│ ★ 用户确认①：教学内容本身           │  ← 教学路径、知识点范围
-└─────────────────────────────────────┘
+★ 用户确认①：教学内容本身
 |
 教学路径设计（七阶段叙事流）
 |
-┌─────────────────────────────────────┐
-│ ★ 用户确认②：字幕与语音文案         │  ← 语音文本草案、时长估算
-└─────────────────────────────────────┘
+★ 用户确认②：字幕与语音文案
 |
 原子拆分检查（元素数 > 8 / 高度 > 5.5 / 宽度 > 13.5）
 |
-┌─────────────────────────────────────┐
-│ ★ 用户确认③：图形需求               │  ← 是否有图形、图形类型
-│ ★ 用户确认④：拆分合理性             │  ← 原子拆分方案是否合理
-└─────────────────────────────────────┘
+★ 用户确认③：图形需求
+★ 用户确认④：拆分合理性
 |
-┌─────────────────────────────────────────────┐
-│ ★ 布局规划阶段（递归闭环）                    │
-│                                             │
-│  调用 ZoneConstants.compute() 获取安全区     │
-│  ┌───────────────────────────────────────┐  │
-│  │ 递归闭环（左上角为入口，右下角为循环）   │  │
-│  │                                        │  │
-│  │   ①分配宽度 ──→ ②内容适配              │  │
-│  │        ↑           │                   │  │
-│  │        │           ↓                   │  │
-│  │   ⑨重新分配  ←── ⑥拆分（触发）         │  │
-│  │        │           │                   │  │
-│  │        ↓           ↓                   │  │
-│  │   ⑧循环结束 ←── ⑤检测溢出              │  │
-│  │        │           │                   │  │
-│  │        └───── ④计算高度 ──→ ③顶部对齐  │  │
-│  │                                        │  │
-│  └───────────────────────────────────────┘  │
-│                                             │
-│  溢出处理优先级：                            │
-│    1. 缩小字号（缩到下限，如 80%）           │
-│    2. 换行（使用 align* 环境）               │
-│    3. 拆分（触发 split_atom.py 按栏位拆分）   │
-│                                             │
-│  递归上限：3 次（超过则标记需人工干预）       │
-└─────────────────────────────────────────────┘
+★ 布局规划阶段（递归闭环）
+  调用 ZoneConstants.compute() 获取安全区
+  递归循环：分配宽度 → 内容适配 → 顶部对齐 → 计算高度 → 检测溢出 → 拆分（触发）→ 重新分配
+  溢出处理优先级：缩小字号 → 换行 → 拆分
+  递归上限：3 次（超过则标记需人工干预）
 |
-┌─────────────────────────────────────┐
-│ ★ 用户确认⑤：布局规划结果           │  ← 栏数、比例、内容分布
-└─────────────────────────────────────┘
+★ 用户确认⑤：布局规划结果
 |
 生成 Markdown 课程文档（主题_course.md）
 |
 输出 JSON 教学内容文件（courses/主题_content.json）
 |
 是否需要拆分？
-|- 否 -> 直接编写代码
-|- 是 -> 按拆分规则拆分为多个原子 -> 重新走布局闭环
+  否 -> 直接编写代码
+  是 -> 按拆分规则拆分为多个原子 -> 重新走布局闭环
 |
 编写代码（继承 LayoutScene）
 |
@@ -325,35 +265,15 @@ AB != BA
 成片验收（quality_acceptance.md）
 |
 是否多场景？
-|- 否 -> 直接发布
-|- 是 -> FFmpeg合并 -> 全场专项验收 -> 发布
+  否 -> 直接发布
+  是 -> FFmpeg合并 -> 全场专项验收 -> 发布
 |
 结束
 ```
 
 ## 布局规划递归闭环详细说明
 
-**调用接口**：
-
-```python
-from scripts.layout.constants import ZoneConstants
-
-# 1. 获取安全区边界
-zones = ZoneConstants.compute(frame_width=14.22, frame_height=8.0)
-
-# 2. 计算分栏布局
-columns = ZoneConstants.compute_column_layout(
-    zones, num_columns=2, has_graphics=True
-)
-
-# 3. 校验内容适配
-is_valid, violations = ZoneConstants.validate_column_fit(
-    column=columns[0],
-    content_width=estimated_width,
-    content_height=estimated_height,
-    max_height=zones["content_height"]
-)
-```
+**调用接口**：使用 `scripts/layout/constants.py` 中的 `ZoneConstants.compute()` 获取安全区边界，`compute_column_layout()` 计算分栏布局，`validate_column_fit()` 校验内容适配。
 
 **递归闭环流程**：
 
@@ -376,14 +296,14 @@ is_valid, violations = ZoneConstants.validate_column_fit(
 
 ## 物理图元第三方库引用规范
 
-当内置 Manim 技能中的图元实现，无法满足物理图元绘制需求时，按以下优先级引用第三方库：
+当内置 Manim 技能中的图元实现，无法满足物理图元绘制需求或修复次数超过3次时，按以下优先级引用第三方库：
 
-| 优先级 | 库名                | 适用场景                                                       | 安装方式                      |
-| ------ | ------------------- | -------------------------------------------------------------- | ----------------------------- |
-| 1      | **manim-physics**   | 力学（力图、弹簧、斜面、滑轮）、电磁（电场、磁场、电路）、波动 | `pip install manim-physics`   |
-| 2      | **manim-circuit**   | 电路图（电阻、电容、电感、电源、开关、导线连接点）             | `pip install manim-circuit`   |
-| 3      | **manim-Astronomy** | 天体物理（行星轨道、星系、望远镜视角）                         | `pip install manim-Astronomy` |
-| 4      | **chanim**          | 化学（分子结构、化学键、反应方程式）                           | `pip install chanim`          |
+| 优先级 | 库名                | 适用场景                                                       |
+| ------ | ------------------- | -------------------------------------------------------------- |
+| 1      | **manim-physics**   | 力学（力图、弹簧、斜面、滑轮）、电磁（电场、磁场、电路）、波动 |
+| 2      | **manim-circuit**   | 电路图（电阻、电容、电感、电源、开关、导线连接点）             |
+| 3      | **manim-Astronomy** | 天体物理（行星轨道、星系、望远镜视角）                         |
+| 4      | **chanim**          | 化学（分子结构、化学键、反应方程式）                           |
 
 **引用原则**：
 
@@ -391,25 +311,6 @@ is_valid, violations = ZoneConstants.validate_column_fit(
 2. **按需引入**：仅当内置 API 无法满足时才引用第三方库
 3. **版本兼容**：确认第三方库版本与当前 Manim 版本兼容
 4. **标注来源**：在代码注释中标注使用的库和版本
-
-**代码注释模板**：
-
-```python
-# 物理图元引用第三方库
-# 库名：manim-physics
-# 版本：需在 requirements.txt 中锁定版本
-# 用途：[具体说明，如：弹簧振子动画]
-from manim_physics import *
-```
-
-**规范文件对应**：
-
-| 学科     | 规范文件                                | 第三方库                       |
-| -------- | --------------------------------------- | ------------------------------ |
-| 力学     | verification_checklist.md（物理学科节） | manim-physics                  |
-| 电磁     | verification_checklist.md（物理学科节） | manim-physics, manim-circuit   |
-| 天体物理 | verification_checklist.md（物理学科节） | manim-physics, manim-Astronomy |
-| 化学     | verification_checklist.md（物理学科节） | chanim                         |
 
 **禁止事项**：
 
@@ -420,22 +321,11 @@ from manim_physics import *
 ## 负向约束（Don't）
 
 > **用途**：当工作流步骤写成这样 → 直接导致返工或事故。Agent 必须避免以下任意一条。
-> 对应 SKILL.md 中的 [负向约束速查索引](../SKILL.md#负向约束速查索引dont-quick-reference)。
 
 ### W-D1：跳过教学草案 Markdown 用户确认
 
-```python
-# ❌ DON'T：直接生成 JSON 和代码，跳过 Markdown 草案
-step_json = generate_json(topic)
-step_code = generate_code(step_json)  # 无用户确认直接生产
-
-# ✅ DO：必须经过 3 步确认
-draft_md = generate_draft_markdown(topic)  # 1. 生成草案
-# → 用户审核 Markdown（教学路径/内容/时长）
-step_json = update_json_from_draft(draft_md)  # 2. 更新 JSON
-# → 用户审核 JSON 细节
-step_code = generate_code(step_json)  # 3. 生成代码
-```
+- **禁止**：直接生成 JSON 和代码，跳过 Markdown 草案
+- **必须**：经过 3 步确认（生成草案 → 用户审核 Markdown → 更新 JSON → 用户审核 JSON → 生成代码）
 
 **画面炸成**：生成内容与用户意图不符 → 返工重做
 
@@ -443,20 +333,8 @@ step_code = generate_code(step_json)  # 3. 生成代码
 
 ### W-D2：跳过 Gate 3 程序化布局校验
 
-```python
-# ❌ DON'T：代码写完直接渲染，跳过 validate_layout()
-def construct(self):
-    formula = MathTex(r"...")
-    self.add(formula)
-    self.play(Write(formula))
-    self.render()    # 直接渲染，未调用 validate_layout()
-
-# ✅ DO：代码完成后、渲染前必须调用
-violations = self.validate_layout(all_mobs)
-if violations:
-    print("布局违规:", violations)
-    return  # 禁止渲染，修复后重试
-```
+- **禁止**：代码写完直接渲染，跳过 `validate_layout()`
+- **必须**：代码完成后、渲染前必须调用 `validate_layout()`，如有违规则修复后重试
 
 **画面炸成**：布局问题仅在渲染后肉眼可见，修复成本高
 
@@ -464,17 +342,8 @@ if violations:
 
 ### W-D3：跳过教学草案时长估算
 
-```python
-# ❌ DON'T：每个原子 duration 留默认值 6.0（未按实际内容估算）
-atoms = [{"id": "xxx", "duration": 6.0}] * 20  # 全部默认时长
-
-# ✅ DO：每个原子估算人工制作时长，填入 draft_md
-atoms_estimated = [
-    {"id": "simple_def", "estimated_minutes": 5},    # 简单定义
-    {"id": "complex_proof", "estimated_minutes": 15}, # 复杂证明
-    {"id": "animation_derivation", "estimated_minutes": 12}  # 动画推导
-]
-```
+- **禁止**：每个原子 duration 留默认值 6.0（未按实际内容估算）
+- **必须**：每个原子估算人工制作时长，填入 draft_md（简单定义约 5 分钟、复杂证明约 15 分钟、动画推导约 12 分钟）
 
 **画面炸成**：用户无法估计总制作时长，项目管理失控
 
@@ -482,16 +351,7 @@ atoms_estimated = [
 
 ### W-D4：跨域混用坐标参考系
 
-```python
-# ❌ DON'T：混用数学坐标系和像素坐标系
-bad_formula = MathTex(r"...").move_to([300, 200, 0])  # 像素坐标
-bad_graph = Circle().move_to(axes.c2p(1, 2))          # 数学坐标
-
-# ✅ DO：统一使用数学坐标系（Y轴向上）
-all_elements = VGroup(
-    MathTex(r"..."),
-    Circle()
-).move_to(axes.c2p(0, 2))
-```
+- **禁止**：混用数学坐标系和像素坐标系
+- **必须**：统一使用数学坐标系（Y轴向上），所有元素位置用 `axes.c2p()` 或相对坐标计算
 
 **画面炸成**：公式与图形位置完全不匹配

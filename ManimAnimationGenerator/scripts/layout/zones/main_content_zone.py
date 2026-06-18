@@ -55,44 +55,50 @@ class MainContentZone(ZoneBase):
         self._layout_mode = layout_mode
 
     def _get_boundaries(self, mode: str) -> dict:
-        """根据布局模式返回边界坐标"""
-        boundaries = {
-            "vertical": {
-                "x_min": ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MIN,
-                "x_max": ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MAX,
-                "y_min": ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MIN,
-                "y_max": ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MAX,
-            },
-            "two_column": {
-                "x_min": ZoneConstants.MAIN_CONTENT_TWO_COL_X_MIN,
-                "x_max": ZoneConstants.MAIN_CONTENT_TWO_COL_X_MAX,
-                "y_min": ZoneConstants.MAIN_CONTENT_TWO_COL_Y_MIN,
-                "y_max": ZoneConstants.MAIN_CONTENT_TWO_COL_Y_MAX,
-            },
-            "three_column": {
-                # 三栏模式：主内容区包含左栏（步骤说明）和中栏（公式）
-                # 左栏 X ∈ [-6.75, -2.2]，中栏 X ∈ [-1.7, 2.35]
-                # 因此主内容区 X 范围取 [-6.75, 2.35]
-                "x_min": ZoneConstants.THREE_COL_LEFT_X_MIN,
-                "x_max": ZoneConstants.THREE_COL_MID_X_MAX,  # 中栏右边界
-                "y_min": ZoneConstants.THREE_COL_Y_MIN,
-                "y_max": ZoneConstants.THREE_COL_Y_MAX,
-            },
-            "centered": {
-                # 居中模式：内容整体垂直居中（Y=0），使用单栏安全宽度
-                "x_min": ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MIN,
-                "x_max": ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MAX,
-                "y_min": ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MIN,
-                "y_max": ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MAX,
-            },
+        """根据布局模式返回边界坐标
+
+        两栏/三栏布局（has_title=False）使用 90% 高度比例：
+        - 主内容 Y ∈ [-2.88, 3.6]（90% × safe_h = 6.48）
+        - 字幕 Y ∈ [-3.6, -2.88]（10% × safe_h = 0.72）
+
+        单栏/居中布局（has_title=True，三区模式）使用 70% 高度比例：
+        - 标题 Y ∈ [2.64, 4.0]（20% × safe_h = 1.36）
+        - 主内容 Y ∈ [-2.12, 2.64]（70% × safe_h = 4.76）
+        - 字幕 Y ∈ [-2.8, -2.12]（10% × safe_h = 0.68）
+        """
+        # 两栏 / 三栏：与 ZoneConstants.compute(has_title=False) 保持一致
+        if mode in ("two_column", "three_column"):
+            return {
+                "x_min": self._col_x_min(mode),
+                "x_max": self._col_x_max(mode),
+                # 主内容 Y 上界 = safe_y_max = 4.0（无标题区，直接到顶）
+                # 主内容 Y 下界 = safe_y_min + subtitle_zone_h = -2.8 + 1.36 = -1.44
+                "y_min": ZoneConstants.SAFE_AREA_Y_MIN
+                + ZoneConstants.compute(
+                    ZoneConstants.SCREEN_WIDTH,
+                    ZoneConstants.SCREEN_HEIGHT,
+                    has_title=False,
+                )["subtitle_height"],
+                "y_max": ZoneConstants.SAFE_AREA_Y_MAX,
+            }
+
+        # vertical / centered（三区模式）：与 ZoneConstants.compute(has_title=True) 保持一致
+        return {
+            "x_min": ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MIN,
+            "x_max": ZoneConstants.MAIN_CONTENT_SINGLE_COL_X_MAX,
+            "y_min": ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MIN,
+            "y_max": ZoneConstants.MAIN_CONTENT_SINGLE_COL_Y_MAX,
         }
 
-        if mode not in boundaries:
-            raise ValueError(
-                f"Unknown layout mode: {mode}. Must be one of {list(boundaries.keys())}"
-            )
+    def _col_x_min(self, mode: str) -> float:
+        if mode == "two_column":
+            return ZoneConstants.MAIN_CONTENT_TWO_COL_X_MIN
+        return ZoneConstants.THREE_COL_LEFT_X_MIN
 
-        return boundaries[mode]
+    def _col_x_max(self, mode: str) -> float:
+        if mode == "two_column":
+            return ZoneConstants.MAIN_CONTENT_TWO_COL_X_MAX
+        return ZoneConstants.THREE_COL_MID_X_MAX
 
     @property
     def layout_mode(self) -> str:
