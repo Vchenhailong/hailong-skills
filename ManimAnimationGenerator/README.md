@@ -1,4 +1,12 @@
-<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/19336ef0-f97c-47f8-98dc-f367d0f7e236" />
+- 数学教学内容视频实际表现
+<img width="480" height="270" alt="image" src="https://github.com/user-attachments/assets/19336ef0-f97c-47f8-98dc-f367d0f7e236" />
+
+- 两栏排版布局设计示意
+<img width="480" height="270" alt="两栏排版布局设计示意e" src="https://github.com/user-attachments/assets/aa09fc78-1579-4b11-8a49-a7eff932e895" />
+
+- 三栏排版布局设计示意（注意：AI 很难绘制出正确的物理电路图）  
+<img width="480" height="270" alt="三栏排版布局设计示意-AI很难绘制出正确的物理电路图" src="https://github.com/user-attachments/assets/c47550ed-7ef3-469c-8f17-33b436bcd49b" />
+
 
 # ManimAnimationGenerator 技能包
 
