@@ -206,20 +206,21 @@ description: 专业的 Manim 结构化知识动画生成专家，提供企业级
 
 ### 1. 参考文档（设计约束与验收规则来源）
 
-| 规范              | 文件                                                                               |
-| ----------------- | ---------------------------------------------------------------------------------- |
-| 完整工作流程      | `references/workflow.md`                                                           |
-| 布局规范          | `references/layout.md`                                                             |
-| 动画规范          | `references/animation.md`                                                          |
-| 渲染规范          | `references/rendering.md`                                                          |
-| 字幕规范          | `references/subtitle_scroller.md`                                                  |
-| JSON 教学内容规范 | `references/json_schema.md`                                                        |
-| 物理学科规范      | `references/physics.md`（含 §15.1.1 受力点选择强制规范 / §8.4 电路图数理验证规则） |
-| LaTeX 公式规范    | `references/math_latex.md`                                                         |
-| 验证清单          | `references/verification_checklist.md`                                             |
-| 成片验收清单      | `references/quality_acceptance.md`                                                 |
-| 教学路径设计      | `references/pedagogy_path.md`                                                      |
-| TTS 语音指南      | `references/tts_guide.md`                                                          |
+| 规范              | 文件                                   |
+| ----------------- | -------------------------------------- |
+| 完整工作流程      | `references/workflow.md`               |
+| 布局规范          | `references/layout.md`                 |
+| 动画规范          | `references/animation.md`              |
+| 渲染规范          | `references/rendering.md`              |
+| 字幕规范          | `references/subtitle_scroller.md`      |
+| JSON 教学内容规范 | `references/json_schema.md`            |
+| 物理学科规范      | `references/physics.md`                |
+| 电路图绘制设计    | `references/netlist.md`                |
+| LaTeX 公式规范    | `references/math_latex.md`             |
+| 验证清单          | `references/verification_checklist.md` |
+| 成片验收清单      | `references/quality_acceptance.md`     |
+| 教学路径设计      | `references/pedagogy_path.md`          |
+| TTS 语音指南      | `references/tts_guide.md`              |
 
 ### 2. 代码实现引用（技能核心能力入口）
 

@@ -235,6 +235,11 @@ class ZoneConstants:
     THREE_COL_RIGHT_X_MAX = 6.75
     THREE_COL_Y_MIN = None
     THREE_COL_Y_MAX = None
+    THREE_COL_Y_MID = None  # 主干Y基准
+
+    # 电路图专用常量（netlist.md §一）
+    THREE_COL_BRANCH_OFFSET = 0.8      # HB_BRANCH: 并联分支垂直偏移
+    THREE_COL_RETURN_Y = -2.0          # HB_RETURN: 回线Y坐标
 
     # 标题/副标题 Y 位置
     TITLE_Y = None
@@ -305,6 +310,7 @@ class ZoneConstants:
         cls.THREE_COL_RIGHT_X_MIN = r(zones2col["three_right_x_min"])
         cls.THREE_COL_Y_MIN = r(zones2col["content_y_min"])
         cls.THREE_COL_Y_MAX = r(zones2col["content_y_max"])
+        cls.THREE_COL_Y_MID = r((zones2col["content_y_min"] + zones2col["content_y_max"]) / 2)
 
         # 字幕区顶部/底部固定（两区模式，10% 高度，9:1 比例）
         cls.SUBTITLE_ZONE_TOP_Y = r(zones2col["subtitle_y_max"])

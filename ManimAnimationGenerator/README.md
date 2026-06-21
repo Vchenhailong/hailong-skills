@@ -1,11 +1,14 @@
 - 数学教学内容视频实际表现
+
 <img width="480" height="270" alt="image" src="https://github.com/user-attachments/assets/19336ef0-f97c-47f8-98dc-f367d0f7e236" />
 
-- 两栏排版布局设计示意
-<img width="480" height="270" alt="两栏排版布局设计示意e" src="https://github.com/user-attachments/assets/aa09fc78-1579-4b11-8a49-a7eff932e895" />
+- 两栏排版布局设计示意（含受力分析图例）
+  
+ <img width="480" height="270" alt="两栏排版布局设计示意" src="https://github.com/user-attachments/assets/aa09fc78-1579-4b11-8a49-a7eff932e895" />
 
-- 三栏排版布局设计示意（注意：AI 很难绘制出正确的物理电路图）  
-<img width="480" height="270" alt="三栏排版布局设计示意-AI很难绘制出正确的物理电路图" src="https://github.com/user-attachments/assets/c47550ed-7ef3-469c-8f17-33b436bcd49b" />
+- 三栏排版布局设计示意（AI 很难绘制出正确的物理电路图）
+  
+<img width="480" height="270" alt="manim三栏排版布局示意" src="https://github.com/user-attachments/assets/965c8d15-a208-4ea1-841e-d08f30821ac8" />
 
 
 # ManimAnimationGenerator 技能包
@@ -18,9 +21,9 @@
 本技能可通过任意AI模型接收用户的课程知识目标，自动分析内容结构，生成人类可读的教学内容 Markdown 与对应的课程结构 JSON，由AI驱动 `manim` 渲染引擎输出知识点动画视频。
 
 主旨目标3个：
-A. 屏蔽绝大多数manim编程工作
-B. 力求解决manim的核心短板问题————自动完成排版布局、内容缩放、内容动画处理、字幕处理和时长控制
-C. 快速、稳定的通过内容驱动AI生成manim视频，帮助用户聚焦在纯内容上（当然，图形绘制的人机协同调试是难以避免的）
+- A. 屏蔽绝大多数manim编程工作
+- B. 力求解决manim的核心短板问题————自动完成排版布局、内容缩放、内容动画处理、字幕处理和时长控制
+- C. 快速、稳定的通过内容驱动AI生成manim视频，帮助用户聚焦在纯内容上（当然，图形绘制的人机协同调试是难以避免的）
 
 决策影响：技能本身已经做了验证与测试，但 LLM 自身能力可能导致鲁棒性降低，对齐度偏离。建议选择第一梯队的模型。
 
@@ -53,6 +56,7 @@ C. 快速、稳定的通过内容驱动AI生成manim视频，帮助用户聚焦�
 | math_latex.md             | 数学 LaTeX 规范（MathTex vs Tex）              |
 | pedagogy_path.md          | 教学路径设计（识记→理解→应用）                 |
 | physics.md                | 物理绘图图元规范（含受力点选择规范）           |
+| netlist.md                | 电路图绘制的思路设计（关键承接是Icapy库-网表） |
 | project_structure.md      | 工程目录结构规范                               |
 | quality_acceptance.md     | 验收标准与质量门禁                             |
 | rendering.md              | 渲染配置（1080p60/720p30/4k）                  |
