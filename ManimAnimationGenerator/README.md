@@ -10,7 +10,7 @@
 
 - 三栏排版布局设计示意（注意：AI 很难绘制出正确的物理电路图）
 
-<img width="480" height="270" alt="三栏排版布局设计示意-AI很难绘制出正确的物理电路图" src="https://github.com/user-attachments/assets/c47550ed-7ef3-469c-8f17-33b436bcd49b" />
+<img width="480" height="270" alt="三栏排版布局设计示意-AI很难绘制出正确的物理电路图"  src="https://github.com/user-attachments/assets/0911e55d-289e-4078-8d16-6539bc9ea67d" />
 
 # ManimAnimationGenerator 技能包
 
