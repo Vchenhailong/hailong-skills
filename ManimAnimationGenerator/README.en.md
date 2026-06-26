@@ -1,13 +1,16 @@
 [:cn: 中文](./README.md) | [:us: English](./README.en.md)
 
 - Demo: Math Teaching Content Video
-  <img width="480" height="270" alt="image" src="https://github.com/user-attachments/assets/19336ef0-f97c-47f8-98dc-f367d0f7e236" />
+
+<img width="480" height="270" alt="image" src="https://github.com/user-attachments/assets/19336ef0-f97c-47f8-98dc-f367d0f7e236" />
 
 - Demo: Two-Column Layout Design (with free-body diagram examples)
-  <img width="480" height="270" alt="Two-column layout demo" src="https://github.com/user-attachments/assets/aa09fc78-1579-4b11-8a49-a7eff932e895" />
+
+<img width="480" height="270" alt="Two-column layout demo" src="https://github.com/user-attachments/assets/aa09fc78-1579-4b11-8a49-a7eff932e895" />
 
 - Demo: Three-Column Layout Design (Note: AI struggles to draw physically correct circuit diagrams)
-  <img width="480" height="270" alt="Three-column layout demo" src="https://github.com/user-attachments/assets/c47550ed-7ef3-469c-8f17-33b436bcd49b" />
+
+<img width="480" height="270" alt="Three-column layout demo" src="https://github.com/user-attachments/assets/c47550ed-7ef3-469c-8f17-33b436bcd49b" />
 
 # ManimAnimationGenerator Skill Pack
 
